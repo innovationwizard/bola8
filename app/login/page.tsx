@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail } from 'lucide-react';
 import Image from 'next/image';
+import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,27 +18,17 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Error al iniciar sesión');
-      }
-
-      // Redirect to dashboard
-      router.push('/');
-      router.refresh();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
+    if (authError) {
+      setError('Credenciales inválidas');
       setLoading(false);
+      return;
     }
+
+    router.push('/');
+    router.refresh();
   };
 
   return (
@@ -66,10 +57,7 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-3">
               Correo Electrónico
             </label>
             <div className="relative">
@@ -87,10 +75,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-3">
               Contraseña
             </label>
             <div className="relative">
@@ -116,11 +101,10 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-xs text-gray-400 text-center mt-6">
-          Powered by <span style={{ color: '#dc2626' }}>Artificial Intelligence Developments</span> © 2025
+        <p className="text-xs text-gray-400 text-center mt-8">
+          Powered by <span style={{ color: '#dc2626' }}>Artificial Intelligence Developments</span> © 2026
         </p>
       </div>
     </div>
   );
 }
-

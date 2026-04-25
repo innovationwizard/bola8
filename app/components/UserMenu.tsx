@@ -3,51 +3,28 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, User } from 'lucide-react';
-
-type UserData = {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-};
+import { createClient } from '@/lib/supabase/client';
 
 export default function UserMenu() {
   const router = useRouter();
-  const [user, setUser] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
-    fetchUser();
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setEmail(user.email ?? null);
+    });
   }, []);
 
-  const fetchUser = async () => {
-    try {
-      const response = await fetch('/api/auth/me');
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-      }
-    } catch (error) {
-      console.error('Error fetching user:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/login');
-      router.refresh();
-    } catch (error) {
-      console.error('Error logging out:', error);
-    }
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
   };
 
-  if (loading || !user) {
-    return null;
-  }
+  if (!email) return null;
 
   return (
     <div className="relative">
@@ -56,20 +33,15 @@ export default function UserMenu() {
         className="flex items-center gap-2 text-xs text-neutral-500 hover:text-neutral-900 transition-colors"
       >
         <User className="w-4 h-4" />
-        <span className="hidden sm:inline">{user.name}</span>
+        <span className="hidden sm:inline">{email}</span>
       </button>
 
       {showMenu && (
         <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setShowMenu(false)}
-          />
-          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg border border-gray-200 shadow-lg z-20">
+          <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+          <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg border border-gray-200 shadow-lg z-20">
             <div className="p-3 border-b border-gray-100">
-              <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <p className="text-xs text-gray-500">{user.email}</p>
-              <p className="text-xs text-gray-400 mt-1 capitalize">{user.role}</p>
+              <p className="text-xs text-gray-500 truncate">{email}</p>
             </div>
             <button
               onClick={handleLogout}
@@ -84,4 +56,3 @@ export default function UserMenu() {
     </div>
   );
 }
-
