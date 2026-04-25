@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Prompt Version Schema",
+  "description": "Schema for prompt versions used in image enhancement ML system",
+  "type": "object",
+  "required": ["version", "created_at", "leonardo", "stablediffusion"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^v\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (e.g., v1.0.0)"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Who created this version (user email or 'system')"
+    },
+    "parent_version": {
+      "type": ["string", "null"],
+      "description": "Parent version this evolved from (null for baseline)"
+    },
+    "leonardo": {
+      "type": "object",
+      "required": ["prompt", "negative_prompt", "init_strength", "guidance_scale", "controlnet_weight"],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "Main prompt for Leonardo AI"
+        },
+        "negative_prompt": {
+          "type": "string",
+          "description": "Negative prompt to avoid unwanted features"
+        },
+        "init_strength": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 0.5,
+          "description": "Init strength (lower = more change)"
+        },
+        "guidance_scale": {
+          "type": "number",
+          "minimum": 5.0,
+          "maximum": 12.0,
+          "description": "Guidance scale (adherence to prompt)"
+        },
+        "controlnet_weight": {
+          "type": "number",
+          "minimum": 0.7,
+          "maximum": 0.99,
+          "description": "ControlNet weight (structure preservation)"
+        }
+      }
+    },
+    "stablediffusion": {
+      "type": "object",
+      "required": ["prompt", "negative_prompt", "strength", "guidance_scale", "controlnet_conditioning_scale"],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "Main prompt for Stable Diffusion"
+        },
+        "negative_prompt": {
+          "type": "string",
+          "description": "Negative prompt"
+        },
+        "strength": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 0.5,
+          "description": "Strength parameter"
+        },
+        "guidance_scale": {
+          "type": "number",
+          "minimum": 5.0,
+          "maximum": 12.0,
+          "description": "Guidance scale"
+        },
+        "controlnet_conditioning_scale": {
+          "type": "number",
+          "minimum": 0.7,
+          "maximum": 0.99,
+          "description": "ControlNet conditioning scale"
+        }
+      }
+    },
+    "performance": {
+      "type": "object",
+      "properties": {
+        "avg_rating": {
+          "type": ["number", "null"],
+          "minimum": 1.0,
+          "maximum": 5.0
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "win_rate": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "last_used": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evolution_reasoning": {
+          "type": "string",
+          "description": "Why this version was created (for evolved prompts)"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of changes from parent version"
+        }
+      }
+    }
+  }
+}

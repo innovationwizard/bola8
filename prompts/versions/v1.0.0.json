@@ -1,0 +1,30 @@
+{
+  "version": "v1.0.0",
+  "created_at": "2025-01-19T00:00:00Z",
+  "created_by": "system_init",
+  "parent_version": null,
+  "leonardo": {
+    "prompt": "ultra-realistic, photorealistic interior design render, 8k, sharp focus, realistic textures on all surfaces, rich wood grain, soft fabric, polished marble, realistic global illumination and soft shadows, preserve exact layout, preserve exact elements, preserve exact materials, preserve exact colors, professional photography quality",
+    "negative_prompt": "drawn, sketch, illustration, cartoon, blurry, distorted, warped, ugly, noisy, grainy, unreal, material changes, color changes, element modifications, flat, montage, photoshop composition",
+    "init_strength": 0.25,
+    "guidance_scale": 7.0,
+    "controlnet_weight": 0.92
+  },
+  "stablediffusion": {
+    "prompt": "ultra-realistic, photorealistic interior design render, 8k, sharp focus, realistic textures, professional photography quality, preserve exact layout, preserve exact elements, preserve exact materials, preserve exact colors",
+    "negative_prompt": "drawn, sketch, illustration, cartoon, blurry, distorted, warped, ugly, noisy, grainy, unreal, material changes, color changes, element modifications, flat, montage, photoshop composition",
+    "strength": 0.2,
+    "guidance_scale": 7.5,
+    "controlnet_conditioning_scale": 0.95
+  },
+  "performance": {
+    "avg_rating": null,
+    "sample_count": 0,
+    "win_rate": null,
+    "last_used": null
+  },
+  "metadata": {
+    "description": "Baseline prompts extracted from app/api/enhance/route.js - Initial hardcoded configuration",
+    "tags": ["baseline", "structure-preservation", "photorealism", "production"]
+  }
+}
