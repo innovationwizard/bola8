@@ -16,7 +16,7 @@ const robotoMono = Roboto_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_BASE_URL ?? 'https://bola8-playground.vercel.app'
+    process.env.NEXT_PUBLIC_BASE_URL || 'https://bola8-playground.vercel.app'
   ),
   title: "BOLA8 PLAYGROUND",
   description: "Marketing image automation.",
