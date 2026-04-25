@@ -21,7 +21,7 @@ const GOOGLE_CLOUD_API_KEY = process.env.GOOGLE_CLOUD_API_KEY;
 // const replicate = REPLICATE_API_TOKEN ? new Replicate({ auth: REPLICATE_API_TOKEN }) : null;
 
 const PROMPT =
-  'ultra-realistic, photorealistic interior design render, 8k, sharp focus, realistic textures on all surfaces, rich wood grain, soft fabric, polished marble, realistic global illumination and soft shadows, preserve exact layout, preserve exact elements, preserve exact materials, preserve exact colors, professional photography quality';
+  'ultra-realistic, photorealistic marketing image, 8k, sharp focus, professional studio lighting, clean composition, brand-ready quality, preserve exact subject, preserve exact colors, preserve exact layout, commercial photography standard';
 
 // const NEGATIVE_PROMPT =
 //   'drawn, sketch, illustration, cartoon, blurry, distorted, warped, ugly, noisy, grainy, unreal, material changes, color changes, element modifications, flat, montage, photoshop composition';
