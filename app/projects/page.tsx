@@ -48,16 +48,16 @@ export default function CampaignsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2]">
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <div className="max-w-4xl mx-auto px-8 py-16">
 
-        <div className="mb-8">
+        <div className="mb-10">
           <Link href="/" className="inline-flex items-center gap-2 text-sm text-neutral-400 hover:text-neutral-700 transition-colors">
             <ArrowLeft className="w-4 h-4" />
             Home
           </Link>
         </div>
 
-        <div className="mb-10 flex items-center justify-between">
+        <div className="mb-12 flex items-center justify-between">
           <h1 className="text-2xl font-light text-neutral-900">Campaigns</h1>
           <Link
             href="/projects/new"
@@ -71,8 +71,8 @@ export default function CampaignsPage() {
         {loading ? (
           <p className="text-neutral-400 text-sm">Loading...</p>
         ) : projects.length === 0 ? (
-          <div className="text-center py-24">
-            <p className="text-neutral-400 text-sm mb-6">No campaigns yet.</p>
+          <div className="text-center py-32">
+            <p className="text-neutral-400 text-sm mb-8">No campaigns yet.</p>
             <Link
               href="/projects/new"
               className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white rounded-lg text-sm font-light"
@@ -82,18 +82,18 @@ export default function CampaignsPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {projects.map((project) => (
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
-                className="flex items-center justify-between bg-white border border-neutral-200 rounded-2xl px-6 py-5 hover:border-neutral-400 transition-all duration-150"
+                className="flex items-center justify-between bg-white border border-neutral-200 rounded-2xl px-8 py-6 hover:border-neutral-400 transition-all duration-150"
               >
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <p className="text-sm font-medium text-neutral-900">{project.project_name}</p>
                   <p className="text-xs text-neutral-400">{project.client_name} · {formatDate(project.updated_at)}</p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-5">
                   <span className={`px-2 py-1 rounded-md text-xs ${STATUS_COLORS[project.status] || STATUS_COLORS.lead}`}>
                     {STATUS_LABELS[project.status] || project.status}
                   </span>

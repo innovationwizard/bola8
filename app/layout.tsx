@@ -15,12 +15,26 @@ const robotoMono = Roboto_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bola8",
-  description: "Interior Design Business Dashboard",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_BASE_URL ?? 'https://bola8-playground.vercel.app'
+  ),
+  title: "BOLA8 PLAYGROUND",
+  description: "Marketing image automation.",
+  openGraph: {
+    title: "BOLA8 PLAYGROUND",
+    description: "Imagenes, Imaginación, Creatividad, Inspiración",
+    images: [{ url: "/og.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "BOLA8 PLAYGROUND",
+    description: "Imagenes, Imaginación, Creatividad, Inspiración",
+    images: ["/og.png"],
+  },
   icons: {
-    icon: "/BOLA8BLUE.png",
-    shortcut: "/BOLA8BLUE.png",
-    apple: "/BOLA8BLUE.png",
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
   },
 };
 

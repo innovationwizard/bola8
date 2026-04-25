@@ -1,33 +1,32 @@
 import Link from "next/link";
+import Image from "next/image";
 import UserMenu from "./components/UserMenu";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#F8F6F2] text-[#171717] flex flex-col">
       <header className="border-b border-neutral-200/70 sticky top-0 z-10 bg-[#F8F6F2]/90 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto px-6 py-5 flex items-center justify-between">
-          <span className="tracking-[0.35em] text-xs uppercase text-neutral-400">
-            BOLA8
-          </span>
+        <div className="max-w-4xl mx-auto px-8 py-6 flex items-center justify-between">
+          <Image src="/logo.png" alt="BOLA8" width={36} height={36} className="object-contain" />
           <UserMenu />
         </div>
       </header>
 
-      <div className="flex-1 max-w-4xl mx-auto w-full px-6 py-16 space-y-16">
+      <div className="flex-1 max-w-4xl mx-auto w-full px-8 py-20 space-y-20">
 
-        <section className="space-y-3">
+        <section className="space-y-4">
           <p className="text-xs uppercase tracking-[0.25em] text-neutral-400">
-            Marketing Images
+            Imagenes, Imaginación, Creatividad, Inspiración
           </p>
           <h1 className="text-3xl font-light text-neutral-900">
-            Automated image production.
+            Generación de imágenes profesionales de manera natural asistida por Inteligencia Artificial
           </h1>
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Link
             href="/projects"
-            className="group border border-neutral-200 rounded-2xl p-8 hover:border-neutral-900 transition-all duration-200 space-y-3"
+            className="group border border-neutral-200 rounded-2xl p-10 hover:border-neutral-900 transition-all duration-200 space-y-4"
           >
             <p className="text-xs uppercase tracking-[0.2em] text-neutral-400 group-hover:text-neutral-600">
               Campaigns
@@ -39,7 +38,7 @@ export default function Home() {
 
           <Link
             href="/tools/enhancer"
-            className="group border border-neutral-200 rounded-2xl p-8 hover:border-neutral-900 transition-all duration-200 space-y-3"
+            className="group border border-neutral-200 rounded-2xl p-10 hover:border-neutral-900 transition-all duration-200 space-y-4"
           >
             <p className="text-xs uppercase tracking-[0.2em] text-neutral-400 group-hover:text-neutral-600">
               Studio
@@ -52,7 +51,7 @@ export default function Home() {
 
       </div>
 
-      <footer className="border-t border-neutral-200/70 py-6">
+      <footer className="border-t border-neutral-200/70 py-8">
         <p className="text-center text-xs text-neutral-400 tracking-[0.2em] uppercase">
           Powered by Artificial Intelligence Developments © 2026
         </p>

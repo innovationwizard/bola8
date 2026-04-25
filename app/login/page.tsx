@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail } from 'lucide-react';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,13 +41,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] flex items-center justify-center px-6">
+    <div className="min-h-screen bg-[#FAFAF8] flex items-center justify-center px-8">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-block mb-4">
-            <div className="text-xs uppercase tracking-[0.35em] text-neutral-500">
-              BOLA8
-            </div>
+        <div className="text-center mb-10">
+          <div className="inline-block mb-5">
+            <Image src="/logo.png" alt="BOLA8" width={64} height={64} className="object-contain mx-auto" />
           </div>
           <h1 className="text-2xl font-light text-gray-900 mb-2">
             Acceso Privado
@@ -58,7 +57,7 @@ export default function LoginPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-lg border border-gray-200 p-8 space-y-6"
+          className="bg-white rounded-lg border border-gray-200 p-10 space-y-8"
         >
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-600">
@@ -81,7 +80,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
                 placeholder="tu@email.com"
               />
             </div>
@@ -102,7 +101,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
                 placeholder="••••••••"
               />
             </div>
@@ -111,7 +110,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition-colors text-sm font-light disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-4 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition-colors text-sm font-light disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
           </button>
