@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { S3_BUCKETS, S3_REGION, getS3Url } from '@/lib/s3-utils';
+import { STORAGE_BUCKETS, getPublicUrl, uploadBuffer } from '@/lib/storage-utils';
 import { saveImageToDatabase, findOrCreateOriginalImage } from '@/lib/db/image-storage';
 import { loadCurrentPromptVersion } from '@/lib/prompt-loader';
 import { suggestParameters, type ParameterSuggestion } from '@/lib/ml-client';
@@ -13,19 +12,6 @@ const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
 const BASE_URL = 'https://cloud.leonardo.ai/api/rest/v1';
 
 const replicate = REPLICATE_API_TOKEN ? new Replicate({ auth: REPLICATE_API_TOKEN }) : null;
-
-const hasExplicitCreds =
-  Boolean(process.env.AWS_ACCESS_KEY_ID) && Boolean(process.env.AWS_SECRET_ACCESS_KEY);
-
-const s3Client = new S3Client({
-  region: S3_REGION,
-  credentials: hasExplicitCreds
-    ? {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-      }
-    : undefined,
-});
 
 const LEGACY_STRUCTURE_MODEL_ID = 'ac614f96-1082-45bf-be9d-757f2d31c174';
 const CONTROLNET_CANNY_ID = '20660B5C-3A83-406A-B233-6AAD728A3267';
@@ -216,8 +202,7 @@ async function generateWithLeonardo(
   const generationId = await generateEnhancedImage(payload);
   const enhancedUrl = await pollForCompletion(generationId);
 
-  // Save to S3
-  const enhancedS3Info = await saveEnhancedImageToS3(enhancedUrl, projectId, `option-${option.toLowerCase()}-${filename}`);
+  const enhancedS3Info = await saveEnhancedImageToStorage(enhancedUrl, projectId, `option-${option.toLowerCase()}-${filename}`);
 
   // Save to DB
   const promptVersionId = await ensurePromptVersionInDB(
@@ -327,33 +312,15 @@ async function generateWithStableDiffusion(
     throw new Error('Unexpected output format from Replicate');
   }
 
-  // Download and save to S3
-  const response = await fetch(enhancedUrl);
-  const sdBuffer = Buffer.from(await response.arrayBuffer());
-
-  const bucketName = S3_BUCKETS.LEONARDO;
-  const finalBucket =
-    bucketName && bucketName !== 'LEONARDO_S3_BUCKET' && !bucketName.includes('LEONARDO_S3')
-      ? bucketName
-      : 'bola8-leonardo-images';
-
+  const sdResponse = await fetch(enhancedUrl);
+  const sdBuffer = Buffer.from(await sdResponse.arrayBuffer());
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '-');
-  const prefix = `enhanced/${projectId}`;
-  const key = `${prefix}/${Date.now()}-option-${option.toLowerCase()}-${safeName}`;
-
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: finalBucket,
-      Key: key,
-      Body: sdBuffer,
-      ContentType: 'image/jpeg',
-    })
-  );
-
+  const sdPath = `enhanced/${projectId}/${Date.now()}-option-${option.toLowerCase()}-${safeName}`;
+  await uploadBuffer(STORAGE_BUCKETS.COMPOSITIONS, sdPath, sdBuffer, 'image/jpeg');
   const enhancedS3Info = {
-    bucket: finalBucket,
-    key,
-    location: getS3Url(finalBucket, key),
+    bucket: STORAGE_BUCKETS.COMPOSITIONS,
+    key: sdPath,
+    location: getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, sdPath),
   };
 
   // Save to DB
@@ -548,63 +515,21 @@ async function pollForCompletion(generationId: string) {
 }
 
 async function backupUploadToS3(buffer: Buffer, filename: string, mimeType: string, projectId: string | null) {
-  const bucketName = S3_BUCKETS.UPLOADS;
-  const finalBucket =
-    bucketName && bucketName !== 'S3_UPLOAD_BUCKET' && !bucketName.includes('S3_')
-      ? bucketName
-      : 'bola8-uploads';
-
-  const safeName = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '-') : 'upload.jpg';
-  const prefix = projectId ? `uploads/${projectId}/originals` : 'uploads/originals';
-  const key = `${prefix}/${Date.now()}-${safeName}`;
-
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: finalBucket,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType || 'application/octet-stream',
-    })
-  );
-
-  return {
-    bucket: finalBucket,
-    key,
-    location: getS3Url(finalBucket, key),
-  };
+  const safeName = (filename || 'upload.jpg').replace(/[^a-zA-Z0-9._-]/g, '-');
+  const storagePath = `${projectId ? `uploads/${projectId}/originals` : 'uploads/originals'}/${Date.now()}-${safeName}`;
+  await uploadBuffer(STORAGE_BUCKETS.UPLOADS, storagePath, buffer, mimeType || 'image/jpeg');
+  return { bucket: STORAGE_BUCKETS.UPLOADS, key: storagePath, location: getPublicUrl(STORAGE_BUCKETS.UPLOADS, storagePath) };
 }
 
-async function saveEnhancedImageToS3(imageUrl: string, projectId: string, filename: string) {
+async function saveEnhancedImageToStorage(imageUrl: string, projectId: string, filename: string) {
   const response = await fetch(imageUrl);
-  if (!response.ok) {
-    throw new Error('Failed to download enhanced image');
-  }
+  if (!response.ok) throw new Error('Failed to download enhanced image');
   const buffer = Buffer.from(await response.arrayBuffer());
 
-  const bucketName = S3_BUCKETS.LEONARDO;
-  const finalBucket =
-    bucketName && bucketName !== 'LEONARDO_S3_BUCKET' && !bucketName.includes('LEONARDO_S3')
-      ? bucketName
-      : 'bola8-leonardo-images';
-
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '-');
-  const prefix = `enhanced/${projectId}`;
-  const key = `${prefix}/${Date.now()}-${safeName}`;
-
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: finalBucket,
-      Key: key,
-      Body: buffer,
-      ContentType: 'image/jpeg',
-    })
-  );
-
-  return {
-    bucket: finalBucket,
-    key,
-    location: getS3Url(finalBucket, key),
-  };
+  const storagePath = `enhanced/${projectId}/${Date.now()}-${safeName}`;
+  await uploadBuffer(STORAGE_BUCKETS.COMPOSITIONS, storagePath, buffer, 'image/jpeg');
+  return { bucket: STORAGE_BUCKETS.COMPOSITIONS, key: storagePath, location: getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath) };
 }
 
 async function processImageForSD(imageBuffer: Buffer, originalWidth: number, originalHeight: number) {

@@ -83,10 +83,10 @@ export default function EnhancedEnhancer() {
     }
   }, [handleFile]);
 
-  // General enhancement
+  // General enhancement — async job pattern (Vercel free tier compatible)
   const enhanceImage = async () => {
     if (!file) return;
-    
+
     setIsProcessing(true);
     enhanceTimerRef.current = Date.now();
     setError(null);
@@ -96,48 +96,44 @@ export default function EnhancedEnhancer() {
       formData.append('image', file);
       formData.append('mode', 'surfaces');
 
-      const response = await fetch('/api/enhance', {
-        method: 'POST',
-        body: formData,
-      });
+      // Start the job — returns immediately with jobId
+      const startRes = await fetch('/api/enhance', { method: 'POST', body: formData });
+      const startData = await startRes.json();
+      if (!startRes.ok) throw new Error(startData.error || 'La mejora falló');
 
-      const data = await response.json();
+      const { jobId } = startData;
+      if (!jobId) throw new Error('No se recibió ID de trabajo');
 
-      if (!response.ok) {
-        throw new Error(data.error || 'La mejora falló');
-      }
+      // Poll status until complete or failed (max ~3.5 min)
+      const maxAttempts = 42;
+      let attempts = 0;
+      while (attempts < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 5000));
+        attempts++;
 
-      // Handle new format with multiple options
-      if (data.options && Array.isArray(data.options)) {
-        setEnhancedOptions(data.options);
-        // Set first option as default enhanced image for backward compatibility
-        if (data.options.length > 0) {
-          setEnhancedImage(data.options[0].url);
+        const statusRes = await fetch(`/api/enhance/status?jobId=${jobId}`);
+        const statusData = await statusRes.json();
+
+        if (statusData.status === 'complete' || statusData.options?.length > 0) {
+          const opts: Array<{ option: string; url: string; imageId?: string }> = statusData.options || [];
+          setEnhancedOptions(opts);
+          if (opts.length > 0) setEnhancedImage(opts[0].url);
+          if (statusData.errors) {
+            if (statusData.errors.optionA) console.warn('Opción A error:', statusData.errors.optionA);
+            if (statusData.errors.optionB) console.warn('Opción B error:', statusData.errors.optionB);
+          }
+          break;
         }
-        // Store original URL if provided
-        if (data.originalS3Url) {
-          // Original is already in preview, but we'll use it for comparison
+
+        if (statusData.status === 'failed') {
+          throw new Error('La mejora falló en el servidor');
         }
-      } else if (data.enhancedUrl) {
-        // Fallback to old format
-        setEnhancedImage(data.enhancedUrl);
-        setEnhancedOptions([]);
       }
 
       if (enhanceTimerRef.current) {
         const elapsedSeconds = ((Date.now() - enhanceTimerRef.current) / 1000).toFixed(2);
         console.log(`Mejora completada en ${elapsedSeconds} segundos.`);
         enhanceTimerRef.current = null;
-      }
-
-      // Log any errors
-      if (data.errors) {
-        if (data.errors.optionA) {
-          console.warn('Opción A error:', data.errors.optionA);
-        }
-        if (data.errors.optionB) {
-          console.warn('Opción B error:', data.errors.optionB);
-        }
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
