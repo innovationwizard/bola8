@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import UserMenu from "./components/UserMenu";
+import Footer from "./components/Footer";
 
 export default function Home() {
   return (
@@ -54,11 +55,7 @@ export default function Home() {
 
       </div>
 
-      <footer className="border-t border-neutral-200/70 py-8">
-        <p className="text-center text-xs text-neutral-400 tracking-[0.2em] uppercase">
-          Powered by Artificial Intelligence Developments © 2026
-        </p>
-      </footer>
+      <Footer />
     </main>
   );
 }

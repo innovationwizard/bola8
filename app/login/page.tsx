@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail } from 'lucide-react';
 import Image from 'next/image';
+import Footer from '@/app/components/Footer';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
@@ -101,9 +102,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-xs text-gray-400 text-center mt-8">
-          Powered by <span style={{ color: '#dc2626' }}>Artificial Intelligence Developments</span> © 2026
-        </p>
+        <Footer />
       </div>
     </div>
   );
