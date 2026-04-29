@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Plus, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowRight, ArrowLeft, FileUp } from 'lucide-react';
 
 type Project = {
   id: string;
@@ -25,9 +25,17 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-50 text-green-600',
 };
 
+type ImportState =
+  | { status: 'idle' }
+  | { status: 'importing' }
+  | { status: 'done'; summary: string }
+  | { status: 'error'; message: string };
+
 export default function CampaignsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importState, setImportState] = useState<ImportState>({ status: 'idle' });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -42,6 +50,30 @@ export default function CampaignsPage() {
   }, []);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setImportState({ status: 'importing' });
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/campaigns/import', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Import failed');
+      const lines = (data.created as { campaign: string; posts: number }[])
+        .map(c => `${c.campaign} (${c.posts} posts)`)
+        .join(', ');
+      setImportState({ status: 'done', summary: lines });
+      fetchProjects();
+      setTimeout(() => setImportState({ status: 'idle' }), 5000);
+    } catch (err) {
+      setImportState({ status: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
+      setTimeout(() => setImportState({ status: 'idle' }), 5000);
+    }
+  };
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -59,14 +91,43 @@ export default function CampaignsPage() {
 
         <div className="mb-12 flex items-center justify-between">
           <h1 className="text-2xl font-light text-neutral-900">Campaigns</h1>
-          <Link
-            href="/projects/new"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 transition-colors text-sm font-light"
-          >
-            <Plus className="w-4 h-4" />
-            New
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importState.status === 'importing'}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-200 bg-white text-neutral-700 rounded-lg hover:border-neutral-400 transition-colors text-sm font-light disabled:opacity-50"
+            >
+              <FileUp className="w-4 h-4" />
+              {importState.status === 'importing' ? 'Importando...' : 'Importar plan'}
+            </button>
+            <Link
+              href="/projects/new"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 transition-colors text-sm font-light"
+            >
+              <Plus className="w-4 h-4" />
+              New
+            </Link>
+          </div>
         </div>
+
+        {importState.status === 'done' && (
+          <div className="mb-6 px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700">
+            Importado: {importState.summary}
+          </div>
+        )}
+        {importState.status === 'error' && (
+          <div className="mb-6 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+            {importState.message}
+          </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={handleImport}
+        />
 
         {loading ? (
           <p className="text-neutral-400 text-sm">Loading...</p>
