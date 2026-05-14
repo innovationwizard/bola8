@@ -1,19 +1,32 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, ImageIcon, Sparkles, RotateCcw } from 'lucide-react';
 
 type Project = {
   id: string;
   client_name: string;
-  client_email: string;
-  client_phone: string;
   project_name: string;
   status: string;
   notes: string;
   updated_at: string;
+};
+
+type Post = {
+  id: string;
+  post_number: number | null;
+  fecha: string | null;
+  idea: string | null;
+  texto_en_arte: string | null;
+  formato: string | null;
+  plataforma: string | null;
+  estatus: string;
+  image_id: string | null;
+  image_url: string | null;
+  image_rating: number | null;
+  generating?: boolean;
 };
 
 const STAGES = [
@@ -22,25 +35,36 @@ const STAGES = [
   { id: 'completed', label: 'Completed' },
 ];
 
-export default function CampaignDetailPage() {
-  const params = useParams();
-  const projectId = params.id as string;
-  const [project, setProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState(true);
+const formatFecha = (d: string | null) =>
+  d ? new Date(d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '—';
 
-  const fetchProject = useCallback(async () => {
+export default function CampaignDetailPage() {
+  const params    = useParams();
+  const router    = useRouter();
+  const projectId = params.id as string;
+
+  const [project, setProject]   = useState<Project | null>(null);
+  const [posts, setPosts]       = useState<Post[]>([]);
+  const [loading, setLoading]   = useState(true);
+
+  const fetchAll = useCallback(async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}`);
-      const data = await response.json();
-      setProject(data.project);
-    } catch (error) {
-      console.error('Error fetching campaign:', error);
+      const [projRes, postsRes] = await Promise.all([
+        fetch(`/api/projects/${projectId}`),
+        fetch(`/api/projects/${projectId}/posts`),
+      ]);
+      const projData  = await projRes.json();
+      const postsData = await postsRes.json();
+      setProject(projData.project);
+      setPosts(postsData.posts || []);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   }, [projectId]);
 
-  useEffect(() => { fetchProject(); }, [fetchProject]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const updateStatus = async (status: string) => {
     await fetch(`/api/projects/${projectId}`, {
@@ -48,20 +72,37 @@ export default function CampaignDetailPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
-    fetchProject();
+    fetchAll();
+  };
+
+  const generateImage = async (postId: string) => {
+    setPosts(ps => ps.map(p => p.id === postId ? { ...p, generating: true } : p));
+    try {
+      const res  = await fetch(`/api/posts/${postId}/generate`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      // Navigate straight to the image feedback view.
+      router.push(`/projects/${projectId}/posts/${postId}?imageId=${data.imageId}`);
+    } catch (err) {
+      console.error(err);
+      setPosts(ps => ps.map(p => p.id === postId ? { ...p, generating: false } : p));
+    }
   };
 
   if (loading) return (
     <div className="min-h-screen bg-[#F8F6F2] flex items-center justify-center">
-      <p className="text-neutral-400 text-sm">Loading...</p>
+      <p className="text-neutral-400 text-sm">Cargando...</p>
     </div>
   );
 
   if (!project) return (
     <div className="min-h-screen bg-[#F8F6F2] flex items-center justify-center">
-      <p className="text-neutral-400 text-sm">Campaign not found.</p>
+      <p className="text-neutral-400 text-sm">Campaña no encontrada.</p>
     </div>
   );
+
+  const total     = posts.length;
+  const generated = posts.filter(p => p.image_id).length;
 
   return (
     <div className="min-h-screen bg-[#F8F6F2]">
@@ -78,6 +119,9 @@ export default function CampaignDetailPage() {
               <h1 className="text-2xl font-light text-neutral-900">{project.project_name}</h1>
               <p className="text-sm text-neutral-400 mt-1">{project.client_name}</p>
             </div>
+            {total > 0 && (
+              <p className="text-xs text-neutral-400 mt-1">{generated} / {total} imágenes</p>
+            )}
           </div>
         </div>
 
@@ -105,27 +149,75 @@ export default function CampaignDetailPage() {
           </div>
         </div>
 
-        {/* Details */}
-        <div className="bg-white border border-neutral-200 rounded-2xl p-8 space-y-4">
-          <p className="text-xs uppercase tracking-[0.15em] text-neutral-400">Details</p>
-          <div className="space-y-3 text-sm text-neutral-600">
-            {project.client_email && <p>{project.client_email}</p>}
-            {project.client_phone && <p>{project.client_phone}</p>}
-            {project.notes && <p className="text-neutral-500 whitespace-pre-wrap pt-3">{project.notes}</p>}
+        {/* Posts list */}
+        {posts.length === 0 ? (
+          <div className="bg-white border border-neutral-200 rounded-2xl p-8 text-center">
+            <p className="text-sm text-neutral-400">No hay posts en esta campaña.</p>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.15em] text-neutral-400 px-1">Posts</p>
+            {posts.map((post) => (
+              <div
+                key={post.id}
+                className="bg-white border border-neutral-200 rounded-2xl px-6 py-5 flex items-center gap-5"
+              >
+                {/* Thumbnail or placeholder */}
+                <div className="flex-shrink-0 w-14 h-14 rounded-lg bg-neutral-100 overflow-hidden border border-neutral-200">
+                  {post.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={post.image_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageIcon className="w-5 h-5 text-neutral-300" />
+                    </div>
+                  )}
+                </div>
 
-        {/* Images */}
-        <Link
-          href={`/projects/${projectId}/images`}
-          className="flex items-center justify-between bg-white border border-neutral-200 rounded-2xl px-8 py-6 hover:border-neutral-400 transition-all"
-        >
-          <div className="flex items-center gap-4">
-            <ImageIcon className="w-4 h-4 text-neutral-400" />
-            <span className="text-sm text-neutral-700">Image Assets</span>
+                {/* Post info */}
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <div className="flex items-center gap-3">
+                    {post.post_number && (
+                      <span className="text-xs text-neutral-400">#{post.post_number}</span>
+                    )}
+                    <span className="text-xs text-neutral-400">{formatFecha(post.fecha)}</span>
+                    {post.formato && post.formato !== 'Pendiente' && (
+                      <span className="text-xs text-neutral-400">{post.formato}</span>
+                    )}
+                  </div>
+                  {post.idea && (
+                    <p className="text-sm text-neutral-800 truncate">{post.idea}</p>
+                  )}
+                  {post.texto_en_arte && (
+                    <p className="text-xs text-neutral-500 truncate italic">"{post.texto_en_arte}"</p>
+                  )}
+                </div>
+
+                {/* Action */}
+                <div className="flex-shrink-0">
+                  {post.image_id ? (
+                    <Link
+                      href={`/projects/${projectId}/posts/${post.id}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-600 border border-neutral-200 rounded-lg hover:border-neutral-400 transition-colors"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Refinar
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => generateImage(post.id)}
+                      disabled={post.generating}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 transition-colors disabled:opacity-50"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${post.generating ? 'animate-pulse' : ''}`} />
+                      {post.generating ? 'Generando…' : 'Generar'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-          <ArrowLeft className="w-4 h-4 text-neutral-300 rotate-180" />
-        </Link>
+        )}
 
       </div>
     </div>
