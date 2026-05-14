@@ -189,7 +189,7 @@ export default function CampaignDetailPage() {
                     <p className="text-sm text-neutral-800 truncate">{post.idea}</p>
                   )}
                   {post.texto_en_arte && (
-                    <p className="text-xs text-neutral-500 truncate italic">"{post.texto_en_arte}"</p>
+                    <p className="text-xs text-neutral-500 truncate italic">&ldquo;{post.texto_en_arte}&rdquo;</p>
                   )}
                 </div>
 

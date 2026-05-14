@@ -83,7 +83,7 @@ export default function PostDetailPage() {
               <h1 className="text-xl font-light text-neutral-900">{post.idea}</h1>
             )}
             {post.texto_en_arte && (
-              <p className="text-sm text-neutral-500 italic">"{post.texto_en_arte}"</p>
+              <p className="text-sm text-neutral-500 italic">&ldquo;{post.texto_en_arte}&rdquo;</p>
             )}
             {post.descripcion && (
               <p className="text-sm text-neutral-500 pt-1">{post.descripcion}</p>
