@@ -1,0 +1,80 @@
+{
+  "name": "DOCX Content Plan ETL",
+  "version": "1.0",
+  "created": "2026-05-07",
+  "description": "ETL pipeline to import monthly social media content plans from DOCX into Supabase posts table. Extends the existing XLSX import route to also handle DOCX.",
+
+  "source": {
+    "format": "DOCX",
+    "example": "docs/SocialMediaPlan2026Junio.docx",
+    "naming_convention": "SocialMediaPlan{YYYY}{SpanishMonth}.docx",
+    "structure": {
+      "tables_total": 10,
+      "layout": "alternating: 1 banner table (project header) + 1 data table (15 posts) × 5 projects",
+      "data_table_rows": 16,
+      "data_table_cols": 5,
+      "columns": {
+        "0": "post_number + project_name (e.g. '1 Benestare')",
+        "1": "Idea de Publicación → idea",
+        "2": "Descripción → descripcion",
+        "3": "Texto en Arte → texto_en_arte",
+        "4": "Copy listo para publicar → caption"
+      }
+    }
+  },
+
+  "target": {
+    "database": "Supabase (PostgreSQL)",
+    "tables": ["projects", "posts"],
+    "campaign_naming": "{ProjectName} — {mes} {year}",
+    "client_name": "Puerta Abierta"
+  },
+
+  "field_mapping": {
+    "post_number":   "parsed from col 0 leading digits",
+    "proyecto":      "parsed from col 0 after digits",
+    "idea":          "col 1",
+    "descripcion":   "col 2",
+    "texto_en_arte": "col 3",
+    "caption":       "col 4",
+    "fecha":         "inferred: first day of target month (see etl_rules)",
+    "hashtags":      "not in DOCX → null",
+    "formato":       "not in DOCX → 'Pendiente'",
+    "plataforma":    "not in DOCX → 'Pendiente'",
+    "estatus":       "'Pendiente'"
+  },
+
+  "etl_rules": {
+    "null_dates":  "When fecha is absent from source, auto-assign the 1st day of the target month. Month inferred from filename (Spanish month name + 4-digit year). Applies to all future ETL with null dates.",
+    "null_enums":  "When enum-style fields (formato, plataforma, etc.) are absent from source, store 'Pendiente'. Never NULL.",
+    "idempotency": "On re-import: existing posts for the campaign are deleted and re-inserted. Campaign row is upserted (matched by project_name + client_name).",
+    "no_data_loss": "ALL fields from source document must be preserved. Adding new columns via migration is preferred over dropping source fields."
+  },
+
+  "migrations": [
+    {
+      "file": "lib/db/migrations/010_add_descripcion_to_posts.sql",
+      "description": "ADD COLUMN descripcion TEXT to posts table",
+      "applied": "2026-05-07"
+    }
+  ],
+
+  "implementation": {
+    "route": "app/api/campaigns/import/route.ts",
+    "detection": "file.name.toLowerCase().endsWith('.docx')",
+    "zip_library": "fflate (transitive dep of xlsx) — unzipSync",
+    "xml_parsing": "regex-based extraction of w:tbl → w:tr → w:tc → w:t text nodes",
+    "shared_logic": "upsertCampaignAndPosts() — used by both XLSX and DOCX paths",
+    "month_inference": "scan filename for Spanish month name + year; fallback to next calendar month"
+  },
+
+  "projects_june_2026": [
+    { "name": "Benestare",        "posts": 15, "zona": "Zona 6 Jocotales",   "price": "Q2,230/mes" },
+    { "name": "Bosque Las Tapias","posts": 15, "zona": "Zona 18",            "price": "Q3,099/mes" },
+    { "name": "Boulevard 5",      "posts": 15, "zona": "Zona 5",             "price": "Q7,500/mes" },
+    { "name": "Santa Elena",      "posts": 15, "zona": "Antigua Guatemala",  "price": "$1.5M USD"  },
+    { "name": "Puerta Abierta",   "posts": 15, "zona": "Institucional",      "price": null         }
+  ],
+
+  "total_posts": 75
+}

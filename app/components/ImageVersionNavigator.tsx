@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Download, Sparkles, Palette, Sun, Wand2, Clock, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Sparkles, Palette, Sun, Wand2, Clock, Plus, RefreshCw } from 'lucide-react';
 
 interface ImageVersion {
   id: string;
@@ -13,6 +13,9 @@ interface ImageVersion {
   enhancement_metadata: Record<string, unknown> | null;
   created_at: string;
   filename: string | null;
+  rating: number | null;
+  liked_aspects: string | null;
+  improvement_notes: string | null;
 }
 
 interface ImageVersionNavigatorProps {
@@ -36,139 +39,160 @@ const ENHANCEMENT_TYPE_ICONS: Record<string, React.ReactNode> = {
   elements: <Plus className="w-4 h-4" />,
 };
 
+const RATINGS = [
+  { value: 1, label: 'Muy mala',  emoji: '😞' },
+  { value: 2, label: 'Mala',      emoji: '😕' },
+  { value: 3, label: 'Regular',   emoji: '😐' },
+  { value: 4, label: 'Buena',     emoji: '🙂' },
+  { value: 5, label: 'Muy buena', emoji: '😍' },
+];
+
+interface FeedbackDraft {
+  rating: number | null;
+  liked: string;
+  improve: string;
+}
+
 export default function ImageVersionNavigator({ imageId, className = '' }: ImageVersionNavigatorProps) {
-  const [versions, setVersions] = useState<ImageVersion[]>([]);
+  const [versions, setVersions]       = useState<ImageVersion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState<string | null>(null);
+  const [draft, setDraft]             = useState<FeedbackDraft>({ rating: null, liked: '', improve: '' });
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenError, setRegenError]   = useState<string | null>(null);
 
   const fetchVersions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await fetch(`/api/images/${imageId}/versions`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch versions');
-      }
-
+      if (!response.ok) throw new Error('Failed to fetch versions');
       const data = await response.json();
-      setVersions(data.versions || []);
-      
-      // Find the current image in the versions array
-      const currentIndex = data.versions.findIndex((v: ImageVersion) => v.id === imageId);
-      setCurrentIndex(currentIndex >= 0 ? currentIndex : 0);
+      const vs: ImageVersion[] = data.versions || [];
+      setVersions(vs);
+      const idx = vs.findIndex((v) => v.id === imageId);
+      setCurrentIndex(idx >= 0 ? idx : vs.length - 1);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
-      console.error('Error fetching versions:', err);
     } finally {
       setLoading(false);
     }
   }, [imageId]);
 
+  useEffect(() => { fetchVersions(); }, [fetchVersions]);
+
+  // Pre-populate draft when navigating to a version that already has feedback.
   useEffect(() => {
-    fetchVersions();
-  }, [fetchVersions]);
+    const v = versions[currentIndex];
+    if (!v) return;
+    setDraft({
+      rating:  v.rating ?? null,
+      liked:   v.liked_aspects ?? '',
+      improve: v.improvement_notes ?? '',
+    });
+    setRegenError(null);
+  }, [currentIndex, versions]);
 
   const currentVersion = versions[currentIndex];
-  const hasPrevious = currentIndex > 0;
-  const hasNext = currentIndex < versions.length - 1;
+  const hasPrevious    = currentIndex > 0;
+  const hasNext        = currentIndex < versions.length - 1;
 
-  const goToPrevious = () => {
-    if (hasPrevious) {
-      setCurrentIndex(currentIndex - 1);
+  const goToPrevious = () => { if (hasPrevious) setCurrentIndex(currentIndex - 1); };
+  const goToNext     = () => { if (hasNext)      setCurrentIndex(currentIndex + 1); };
+  const goToVersion  = (i: number) => { if (i >= 0 && i < versions.length) setCurrentIndex(i); };
+
+  const getImageUrl    = (v: ImageVersion) => v.isOriginal ? v.original_url : (v.enhanced_url || v.original_url);
+  const getVersionLabel = (v: ImageVersion) => v.isOriginal ? 'Original' : `Versión ${v.version}`;
+
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const handleRegenerate = async () => {
+    if (!currentVersion || !draft.rating) return;
+    setRegenerating(true);
+    setRegenError(null);
+    try {
+      // 1 — persist the feedback for this version
+      const fbRes = await fetch(`/api/images/${currentVersion.id}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating: draft.rating, liked_aspects: draft.liked, improvement_notes: draft.improve }),
+      });
+      if (!fbRes.ok) throw new Error('No se pudo guardar el feedback');
+
+      // 2 — regenerate from this version using accumulated feedback
+      const rgRes = await fetch(`/api/images/${currentVersion.id}/regenerate`, { method: 'POST' });
+      if (!rgRes.ok) {
+        const err = await rgRes.json().catch(() => ({}));
+        throw new Error(err.error || 'La regeneración falló');
+      }
+
+      // 3 — reload all versions and jump to the new one (last)
+      await fetchVersions();
+      // fetchVersions sets currentIndex to the initial imageId position;
+      // after regen we want the newest version, which will be last.
+      setCurrentIndex((prev) => {
+        void prev; // will be overridden below
+        return -1; // trigger the effect below
+      });
+    } catch (err) {
+      setRegenError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setRegenerating(false);
     }
   };
 
-  const goToNext = () => {
-    if (hasNext) {
-      setCurrentIndex(currentIndex + 1);
+  // After fetchVersions resolves, jump to the latest version.
+  useEffect(() => {
+    if (currentIndex === -1 && versions.length > 0) {
+      setCurrentIndex(versions.length - 1);
     }
-  };
+  }, [currentIndex, versions]);
 
-  const goToVersion = (index: number) => {
-    if (index >= 0 && index < versions.length) {
-      setCurrentIndex(index);
-    }
-  };
+  if (loading) return (
+    <div className={`flex items-center justify-center py-12 ${className}`}>
+      <p className="text-sm text-gray-400">Cargando versiones...</p>
+    </div>
+  );
 
-  const getImageUrl = (version: ImageVersion) => {
-    if (version.isOriginal) {
-      return version.original_url;
-    }
-    return version.enhanced_url || version.original_url;
-  };
+  if (error) return (
+    <div className={`text-center py-12 ${className}`}>
+      <p className="text-sm text-red-500">{error}</p>
+    </div>
+  );
 
-  const getDownloadUrl = (version: ImageVersion) => {
-    return getImageUrl(version);
-  };
+  if (versions.length === 0) return (
+    <div className={`text-center py-12 ${className}`}>
+      <p className="text-sm text-gray-400">No se encontraron versiones</p>
+    </div>
+  );
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const getVersionLabel = (version: ImageVersion) => {
-    if (version.isOriginal) {
-      return 'Original';
-    }
-    return `Versión ${version.version}`;
-  };
-
-  if (loading) {
-    return (
-      <div className={`flex items-center justify-center py-12 ${className}`}>
-        <div className="text-sm text-gray-400">Cargando versiones...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`text-center py-12 ${className}`}>
-        <p className="text-sm text-red-500">{error}</p>
-      </div>
-    );
-  }
-
-  if (versions.length === 0) {
-    return (
-      <div className={`text-center py-12 ${className}`}>
-        <p className="text-sm text-gray-400">No se encontraron versiones</p>
-      </div>
-    );
-  }
+  const isPerfect = draft.rating === 5;
 
   return (
     <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
+
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="text-sm font-medium text-gray-900">
-              {getVersionLabel(currentVersion)}
-            </div>
+            <span className="text-sm font-medium text-gray-900">{getVersionLabel(currentVersion)}</span>
             {currentVersion.enhancement_type && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5 text-xs text-gray-500">
                 {ENHANCEMENT_TYPE_ICONS[currentVersion.enhancement_type]}
-                <span>{ENHANCEMENT_TYPE_LABELS[currentVersion.enhancement_type]}</span>
-              </div>
+                {ENHANCEMENT_TYPE_LABELS[currentVersion.enhancement_type]}
+              </span>
             )}
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 text-xs text-gray-400">
+            <span className="flex items-center gap-1 text-xs text-gray-400">
               <Clock className="w-3.5 h-3.5" />
-              <span>{formatDate(currentVersion.created_at)}</span>
-            </div>
-            {getDownloadUrl(currentVersion) && (
+              {formatDate(currentVersion.created_at)}
+            </span>
+            {getImageUrl(currentVersion) && (
               <a
-                href={getDownloadUrl(currentVersion) || '#'}
+                href={getImageUrl(currentVersion) || '#'}
                 download
                 className="text-xs text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1"
               >
@@ -180,34 +204,27 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
         </div>
       </div>
 
-      {/* Image Display */}
+      {/* Image */}
       <div className="relative bg-gray-50">
         <div className="aspect-video flex items-center justify-center p-8">
           {getImageUrl(currentVersion) ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={getImageUrl(currentVersion) || ''}
-                alt={getVersionLabel(currentVersion)}
-                className="max-w-full max-h-full object-contain rounded"
-              />
-            </>
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={getImageUrl(currentVersion) || ''}
+              alt={getVersionLabel(currentVersion)}
+              className="max-w-full max-h-full object-contain rounded"
+            />
           ) : (
-            <div className="text-sm text-gray-400">Imagen no disponible</div>
+            <p className="text-sm text-gray-400">Imagen no disponible</p>
           )}
         </div>
 
-        {/* Navigation Arrows */}
         {versions.length > 1 && (
           <>
             <button
               onClick={goToPrevious}
               disabled={!hasPrevious}
-              className={`absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white border border-gray-200 shadow-sm transition-all ${
-                hasPrevious
-                  ? 'hover:border-gray-300 hover:shadow text-gray-700'
-                  : 'opacity-30 cursor-not-allowed text-gray-300'
-              }`}
+              className={`absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white border border-gray-200 shadow-sm transition-all ${hasPrevious ? 'hover:border-gray-300 text-gray-700' : 'opacity-30 cursor-not-allowed text-gray-300'}`}
               aria-label="Versión anterior"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -215,11 +232,7 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
             <button
               onClick={goToNext}
               disabled={!hasNext}
-              className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white border border-gray-200 shadow-sm transition-all ${
-                hasNext
-                  ? 'hover:border-gray-300 hover:shadow text-gray-700'
-                  : 'opacity-30 cursor-not-allowed text-gray-300'
-              }`}
+              className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white border border-gray-200 shadow-sm transition-all ${hasNext ? 'hover:border-gray-300 text-gray-700' : 'opacity-30 cursor-not-allowed text-gray-300'}`}
               aria-label="Versión siguiente"
             >
               <ChevronRight className="w-5 h-5" />
@@ -228,48 +241,125 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
         )}
       </div>
 
-      {/* Version Thumbnails */}
+      {/* Feedback panel — skipped for the original upload */}
+      {!currentVersion.isOriginal && (
+        <div className="px-6 py-6 border-t border-gray-100 space-y-5">
+
+          {/* 1 — Rating */}
+          <div>
+            <p className="text-xs uppercase tracking-[0.15em] text-gray-400 mb-3">¿Cómo quedó esta imagen?</p>
+            <div className="flex items-center gap-2">
+              {RATINGS.map(({ value, label, emoji }) => (
+                <button
+                  key={value}
+                  onClick={() => setDraft(d => ({ ...d, rating: value }))}
+                  className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl border text-xs transition-all ${
+                    draft.rating === value
+                      ? 'border-gray-900 bg-gray-900 text-white'
+                      : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                  }`}
+                >
+                  <span className="text-lg leading-none">{emoji}</span>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 2 — Liked */}
+          <div>
+            <label className="block text-xs uppercase tracking-[0.15em] text-gray-400 mb-2">
+              ¿Qué te gustó?
+            </label>
+            <textarea
+              value={draft.liked}
+              onChange={e => setDraft(d => ({ ...d, liked: e.target.value }))}
+              placeholder="Los colores, la iluminación, la composición…"
+              rows={2}
+              className="w-full text-sm text-gray-700 placeholder-gray-300 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-gray-400 transition-colors"
+            />
+          </div>
+
+          {/* 3 — Improve */}
+          <div>
+            <label className="block text-xs uppercase tracking-[0.15em] text-gray-400 mb-2">
+              ¿Qué necesita mejorar?
+            </label>
+            <textarea
+              value={draft.improve}
+              onChange={e => setDraft(d => ({ ...d, improve: e.target.value }))}
+              placeholder="El fondo se ve artificial, necesita más profundidad…"
+              rows={2}
+              className="w-full text-sm text-gray-700 placeholder-gray-300 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-gray-400 transition-colors"
+            />
+          </div>
+
+          {/* 4 — Action row */}
+          {isPerfect ? (
+            <div className="flex items-center gap-3 pt-1">
+              <span className="text-sm text-gray-700 font-medium">¡Perfecta! 🎉</span>
+              <button
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                className="text-xs text-gray-400 underline hover:text-gray-600 transition-colors disabled:opacity-50"
+              >
+                {regenerating ? 'Generando…' : 'Refinar aún más'}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                onClick={handleRegenerate}
+                disabled={!draft.rating || regenerating}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white text-sm rounded-lg hover:bg-neutral-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+                {regenerating ? 'Generando nueva versión…' : 'Regenerar'}
+              </button>
+              {!draft.rating && (
+                <span className="text-xs text-gray-400">Selecciona una calificación primero</span>
+              )}
+            </div>
+          )}
+
+          {regenError && (
+            <p className="text-xs text-red-500">{regenError}</p>
+          )}
+        </div>
+      )}
+
+      {/* Thumbnails */}
       {versions.length > 1 && (
         <div className="px-6 py-4 border-t border-gray-100">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {versions.map((version, index) => {
-              const isActive = index === currentIndex;
-              const imageUrl = getImageUrl(version);
-              
+              const isActive   = index === currentIndex;
+              const imageUrl   = getImageUrl(version);
+              const hasRating  = version.rating != null;
               return (
                 <button
                   key={version.id}
                   onClick={() => goToVersion(index)}
-                  className={`flex-shrink-0 relative group transition-all ${
-                    isActive
-                      ? 'ring-2 ring-gray-900'
-                      : 'opacity-60 hover:opacity-100'
-                  }`}
+                  className={`flex-shrink-0 relative group transition-all ${isActive ? 'ring-2 ring-gray-900' : 'opacity-60 hover:opacity-100'}`}
                 >
                   <div className="w-16 h-16 rounded border border-gray-200 overflow-hidden bg-gray-100">
                     {imageUrl ? (
-                      <>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={imageUrl}
-                          alt={getVersionLabel(version)}
-                          className="w-full h-full object-cover"
-                        />
-                      </>
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={imageUrl} alt={getVersionLabel(version)} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
                         {version.isOriginal ? 'O' : version.version}
                       </div>
                     )}
                   </div>
+                  {hasRating && (
+                    <span className="absolute -top-1.5 -right-1.5 text-xs leading-none">
+                      {RATINGS.find(r => r.value === version.rating)?.emoji}
+                    </span>
+                  )}
                   {isActive && (
                     <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-gray-900 rounded-full" />
                   )}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="text-xs font-medium text-white bg-black/50 px-2 py-0.5 rounded">
-                      {getVersionLabel(version)}
-                    </div>
-                  </div>
                 </button>
               );
             })}
@@ -277,28 +367,27 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
         </div>
       )}
 
-      {/* Metadata (if available) */}
+      {/* Metadata */}
       {currentVersion.enhancement_metadata && (
         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
           <div className="text-xs text-gray-500 space-y-1">
-            {(currentVersion.enhancement_metadata.replacements && Array.isArray(currentVersion.enhancement_metadata.replacements)) ? (
+            {Array.isArray(currentVersion.enhancement_metadata.replacements) && (
               <div>
                 <span className="font-medium">Reemplazos:</span>{' '}
-                {currentVersion.enhancement_metadata.replacements
-                  .map((r: Record<string, unknown>) => (r.toMaterialName || r.toColor || 'N/A') as string)
+                {(currentVersion.enhancement_metadata.replacements as Record<string, unknown>[])
+                  .map((r) => (r.toMaterialName || r.toColor || 'N/A') as string)
                   .join(', ')}
               </div>
-            ) : null}
-            {currentVersion.enhancement_metadata.lightingConfig ? (
+            )}
+            {!!currentVersion.enhancement_metadata.lightingConfig && (
               <div>
                 <span className="font-medium">Iluminación:</span>{' '}
-                {((currentVersion.enhancement_metadata.lightingConfig as Record<string, unknown>)?.lightSources as Array<unknown>)?.length || 0} fuente(s) de luz
+                {((currentVersion.enhancement_metadata.lightingConfig as Record<string, unknown[]>)?.lightSources as unknown[])?.length || 0} fuente(s) de luz
               </div>
-            ) : null}
+            )}
           </div>
         </div>
       )}
     </div>
   );
 }
-
