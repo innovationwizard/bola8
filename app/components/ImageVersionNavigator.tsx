@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Download, Sparkles, Palette, Sun, Wand2, Clock, Plus, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Sparkles, Palette, Sun, Wand2, Clock, Plus, RefreshCw, ThumbsDown, Frown, Meh, Smile, ThumbsUp } from 'lucide-react';
 
 interface ImageVersion {
   id: string;
@@ -40,11 +40,11 @@ const ENHANCEMENT_TYPE_ICONS: Record<string, React.ReactNode> = {
 };
 
 const RATINGS = [
-  { value: 1, label: 'Muy mala',  emoji: '😞' },
-  { value: 2, label: 'Mala',      emoji: '😕' },
-  { value: 3, label: 'Regular',   emoji: '😐' },
-  { value: 4, label: 'Buena',     emoji: '🙂' },
-  { value: 5, label: 'Muy buena', emoji: '😍' },
+  { value: 1, label: 'Muy mala',  Icon: ThumbsDown },
+  { value: 2, label: 'Mala',      Icon: Frown      },
+  { value: 3, label: 'Regular',   Icon: Meh        },
+  { value: 4, label: 'Buena',     Icon: Smile      },
+  { value: 5, label: 'Muy buena', Icon: ThumbsUp   },
 ];
 
 interface FeedbackDraft {
@@ -168,8 +168,6 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
     </div>
   );
 
-  const isPerfect = draft.rating === 5;
-
   return (
     <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
 
@@ -249,17 +247,17 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
           <div>
             <p className="text-xs uppercase tracking-[0.15em] text-gray-400 mb-3">¿Cómo quedó esta imagen?</p>
             <div className="flex items-center gap-2">
-              {RATINGS.map(({ value, label, emoji }) => (
+              {RATINGS.map(({ value, label, Icon }) => (
                 <button
                   key={value}
                   onClick={() => setDraft(d => ({ ...d, rating: value }))}
-                  className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl border text-xs transition-all ${
+                  className={`flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs transition-all ${
                     draft.rating === value
                       ? 'border-gray-900 bg-gray-900 text-white'
                       : 'border-gray-200 text-gray-500 hover:border-gray-400'
                   }`}
                 >
-                  <span className="text-lg leading-none">{emoji}</span>
+                  <Icon className="w-5 h-5" />
                   <span>{label}</span>
                 </button>
               ))}
@@ -295,32 +293,19 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
           </div>
 
           {/* 4 — Action row */}
-          {isPerfect ? (
-            <div className="flex items-center gap-3 pt-1">
-              <span className="text-sm text-gray-700 font-medium">¡Perfecta! 🎉</span>
-              <button
-                onClick={handleRegenerate}
-                disabled={regenerating}
-                className="text-xs text-gray-400 underline hover:text-gray-600 transition-colors disabled:opacity-50"
-              >
-                {regenerating ? 'Generando…' : 'Refinar aún más'}
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                onClick={handleRegenerate}
-                disabled={!draft.rating || regenerating}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white text-sm rounded-lg hover:bg-neutral-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
-                {regenerating ? 'Generando nueva versión…' : 'Regenerar'}
-              </button>
-              {!draft.rating && (
-                <span className="text-xs text-gray-400">Selecciona una calificación primero</span>
-              )}
-            </div>
-          )}
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={handleRegenerate}
+              disabled={!draft.rating || regenerating}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white text-sm rounded-lg hover:bg-neutral-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+              {regenerating ? 'Generando nueva versión…' : 'Regenerar'}
+            </button>
+            {!draft.rating && (
+              <span className="text-xs text-gray-400">Selecciona una calificación primero</span>
+            )}
+          </div>
 
           {regenError && (
             <p className="text-xs text-red-500">{regenError}</p>
@@ -352,11 +337,14 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
                       </div>
                     )}
                   </div>
-                  {hasRating && (
-                    <span className="absolute -top-1.5 -right-1.5 text-xs leading-none">
-                      {RATINGS.find(r => r.value === version.rating)?.emoji}
-                    </span>
-                  )}
+                  {hasRating && (() => {
+                    const R = RATINGS.find(r => r.value === version.rating);
+                    return R ? (
+                      <span className="absolute -top-1.5 -right-1.5 bg-white border border-gray-200 rounded-full p-0.5 shadow-sm">
+                        <R.Icon className="w-3 h-3 text-gray-600" />
+                      </span>
+                    ) : null;
+                  })()}
                   {isActive && (
                     <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-gray-900 rounded-full" />
                   )}
