@@ -10,9 +10,13 @@ export async function GET(
     const { id } = await params;
     const projectId = id;
 
-    // Get project
+    // Get project + whether its client already has brand DNA defined.
     const projectResult = await query(
-      'SELECT * FROM projects WHERE id = $1',
+      `SELECT p.*,
+              (c.brand_dna IS NOT NULL) AS client_has_brand_dna
+         FROM projects p
+         LEFT JOIN clients c ON c.id = p.client_id
+        WHERE p.id = $1`,
       [projectId]
     );
 

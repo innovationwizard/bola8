@@ -7,7 +7,9 @@ import { ArrowLeft, ImageIcon, Sparkles, RotateCcw } from 'lucide-react';
 
 type Project = {
   id: string;
+  client_id: string | null;
   client_name: string;
+  client_has_brand_dna: boolean;
   project_name: string;
   status: string;
   notes: string;
@@ -117,7 +119,27 @@ export default function CampaignDetailPage() {
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-light text-neutral-900">{project.project_name}</h1>
-              <p className="text-sm text-neutral-400 mt-1">{project.client_name}</p>
+              <div className="flex items-center gap-3 mt-1">
+                <p className="text-sm text-neutral-400">{project.client_name}</p>
+                {project.client_id && (
+                  <Link
+                    href={`/clients/${project.client_id}/brand`}
+                    className={`inline-flex items-center gap-1.5 text-xs underline-offset-2 transition-colors ${
+                      project.client_has_brand_dna
+                        ? 'text-neutral-400 underline hover:text-neutral-700'
+                        : 'text-amber-600 underline hover:text-amber-800 font-medium'
+                    }`}
+                  >
+                    {!project.client_has_brand_dna && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                      </span>
+                    )}
+                    Brand DNA
+                  </Link>
+                )}
+              </div>
             </div>
             {total > 0 && (
               <p className="text-xs text-neutral-400 mt-1">{generated} / {total} imágenes</p>
