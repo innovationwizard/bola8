@@ -3,21 +3,17 @@ import { query } from '@/lib/db';
 import { composeImageWithGoogle } from '@/lib/google-image';
 import { STORAGE_BUCKETS, getPublicUrl, uploadBuffer } from '@/lib/storage-utils';
 import { saveImageToDatabase } from '@/lib/db/image-storage';
+import { buildBrandPromptSection, type BrandDNA, type ProjectBrandGuidelines } from '@/lib/brand';
 
-// Walk up to find the true root of an image chain.
 async function findRootId(imageId: string): Promise<string> {
   let current = imageId;
   while (true) {
-    const res = await query(
-      `SELECT parent_image_id FROM images WHERE id = $1`,
-      [current]
-    );
+    const res = await query(`SELECT parent_image_id FROM images WHERE id = $1`, [current]);
     if (!res.rows.length || !res.rows[0].parent_image_id) return current;
     current = res.rows[0].parent_image_id;
   }
 }
 
-// Collect all feedback from every version in the image family, oldest first.
 async function collectFeedback(rootId: string) {
   const res = await query(
     `SELECT rating, liked_aspects, improvement_notes, created_at
@@ -34,17 +30,21 @@ async function collectFeedback(rootId: string) {
   }[];
 }
 
-// Build the cumulative prompt fed to Gemini 3 composition model.
 function buildPrompt(
   feedback: Awaited<ReturnType<typeof collectFeedback>>,
-  post: { idea: string | null; texto_en_arte: string | null; descripcion: string | null } | null
+  post: { idea: string | null; texto_en_arte: string | null; descripcion: string | null } | null,
+  brand: BrandDNA | null,
+  projectBrand: ProjectBrandGuidelines | null,
 ): string {
   const parts: string[] = [
     'Ultra-realistic photorealistic marketing image. 8k, sharp focus, professional studio lighting, clean composition, brand-ready commercial photography.',
   ];
 
-  if (post?.idea)         parts.push(`Concept: ${post.idea}.`);
-  if (post?.descripcion)  parts.push(`Brief: ${post.descripcion}.`);
+  const brandSection = buildBrandPromptSection(brand, projectBrand);
+  if (brandSection) parts.push(brandSection);
+
+  if (post?.idea)          parts.push(`Concept: ${post.idea}.`);
+  if (post?.descripcion)   parts.push(`Brief: ${post.descripcion}.`);
   if (post?.texto_en_arte) parts.push(`Display text (reference only, do not render as visible text): "${post.texto_en_arte}".`);
 
   if (feedback.length > 0) {
@@ -65,24 +65,28 @@ export async function POST(
   try {
     const { id } = await params;
 
-    // Load the current image record.
     const imgRes = await query(
-      `SELECT id, enhanced_url, original_url, project_id, filename, mime_type
-         FROM images WHERE id = $1`,
+      `SELECT i.id, i.enhanced_url, i.original_url, i.project_id, i.filename, i.mime_type,
+              pr.brand_guidelines,
+              c.brand_dna
+         FROM images i
+         JOIN projects pr ON pr.id = i.project_id
+         LEFT JOIN clients c ON c.id = pr.client_id
+        WHERE i.id = $1`,
       [id]
     );
-    if (!imgRes.rows.length) {
+    if (!imgRes.rows.length)
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
-    }
-    const image = imgRes.rows[0];
-    const currentUrl = image.enhanced_url || image.original_url;
-    if (!currentUrl) {
+
+    const image       = imgRes.rows[0];
+    const currentUrl  = image.enhanced_url || image.original_url;
+    if (!currentUrl)
       return NextResponse.json({ error: 'No image URL to regenerate from' }, { status: 400 });
-    }
 
-    const rootId = await findRootId(id);
+    const brand        = (image.brand_dna        ?? null) as BrandDNA | null;
+    const projectBrand = (image.brand_guidelines ?? null) as ProjectBrandGuidelines | null;
+    const rootId       = await findRootId(id);
 
-    // Post context: a post might be linked to any version in the family.
     const postRes = await query(
       `SELECT idea, texto_en_arte, descripcion
          FROM posts
@@ -95,35 +99,31 @@ export async function POST(
     const post = postRes.rows[0] ?? null;
 
     const feedback = await collectFeedback(rootId);
-    const prompt   = buildPrompt(feedback, post);
+    const prompt   = buildPrompt(feedback, post, brand, projectBrand);
 
     console.log('[regenerate] prompt:', prompt);
 
-    // Download the current version as a buffer.
     const fetchRes = await fetch(currentUrl);
     if (!fetchRes.ok) throw new Error(`Failed to fetch image from storage: ${fetchRes.status}`);
     const imageBuffer = Buffer.from(await fetchRes.arrayBuffer());
 
-    // Compose with Gemini 3 (composition model — retains subject, edits per prompt).
     const newBuffer = await composeImageWithGoogle(imageBuffer, prompt);
 
-    // Upload the result.
     const safeName    = (image.filename || 'regen.jpg').replace(/[^a-zA-Z0-9._-]/g, '-');
     const storagePath = `enhanced/${image.project_id}/${Date.now()}-regen-${safeName}`;
     await uploadBuffer(STORAGE_BUCKETS.COMPOSITIONS, storagePath, newBuffer, 'image/jpeg');
     const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
 
-    // Save to DB as a new version under the root image.
     const saved = await saveImageToDatabase({
-      projectId:    image.project_id,
-      workflowStep: 'design',
-      imageType:    'enhanced',
-      enhancedUrl:  publicUrl,
-      s3Key:        storagePath,
-      s3Bucket:     STORAGE_BUCKETS.COMPOSITIONS,
-      filename:     image.filename,
-      mimeType:     image.mime_type || 'image/jpeg',
-      metadata:     { enhancement_type: 'general', provider: 'google' },
+      projectId:     image.project_id,
+      workflowStep:  'design',
+      imageType:     'enhanced',
+      enhancedUrl:   publicUrl,
+      s3Key:         storagePath,
+      s3Bucket:      STORAGE_BUCKETS.COMPOSITIONS,
+      filename:      image.filename,
+      mimeType:      image.mime_type || 'image/jpeg',
+      metadata:      { enhancement_type: 'general', provider: 'google' },
       parentImageId: rootId,
     });
 

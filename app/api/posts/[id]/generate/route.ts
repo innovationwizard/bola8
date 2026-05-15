@@ -2,20 +2,23 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { createImageWithGoogle } from '@/lib/google-image';
 import { STORAGE_BUCKETS, getPublicUrl, uploadBuffer } from '@/lib/storage-utils';
+import { buildBrandPromptSection, type BrandDNA, type ProjectBrandGuidelines } from '@/lib/brand';
 
-function buildPrompt(post: {
-  idea: string | null;
-  descripcion: string | null;
-  texto_en_arte: string | null;
-  formato: string | null;
-}): string {
+function buildPrompt(
+  post: { idea: string | null; descripcion: string | null; texto_en_arte: string | null; formato: string | null },
+  brand: BrandDNA | null,
+  projectBrand: ProjectBrandGuidelines | null,
+): string {
   const parts: string[] = [
     'Ultra-realistic photorealistic marketing image. 8k, sharp focus, professional studio lighting, clean composition, brand-ready commercial photography.',
   ];
 
-  if (post.idea)         parts.push(`Concept: ${post.idea}.`);
-  if (post.descripcion)  parts.push(`Brief: ${post.descripcion}.`);
-  if (post.texto_en_arte) parts.push(`The image will carry this display text — design the visual to complement it (do not render the text itself): "${post.texto_en_arte}".`);
+  const brandSection = buildBrandPromptSection(brand, projectBrand);
+  if (brandSection) parts.push(brandSection);
+
+  if (post.idea)          parts.push(`Concept: ${post.idea}.`);
+  if (post.descripcion)   parts.push(`Brief: ${post.descripcion}.`);
+  if (post.texto_en_arte) parts.push(`The image will carry this display text — design the visual to complement it (do not render the text itself): &ldquo;${post.texto_en_arte}&rdquo;.`);
   if (post.formato && post.formato !== 'Pendiente') {
     const aspect = post.formato.toLowerCase().includes('carrusel') ? 'square 1:1' : 'portrait 4:5';
     parts.push(`Format: ${aspect}.`);
@@ -31,34 +34,40 @@ export async function POST(
   try {
     const { id } = await params;
 
+    // Fetch post + project brand context in one query.
     const postRes = await query(
-      `SELECT id, project_id, idea, descripcion, texto_en_arte, formato
-         FROM posts WHERE id = $1`,
+      `SELECT p.id, p.project_id, p.idea, p.descripcion, p.texto_en_arte, p.formato,
+              pr.brand_guidelines,
+              c.brand_dna
+         FROM posts p
+         JOIN projects pr ON pr.id = p.project_id
+         LEFT JOIN clients c ON c.id = pr.client_id
+        WHERE p.id = $1`,
       [id]
     );
-    if (!postRes.rows.length) {
+    if (!postRes.rows.length)
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-    }
-    const post = postRes.rows[0];
-    const prompt = buildPrompt(post);
+
+    const row         = postRes.rows[0];
+    const brand       = (row.brand_dna        ?? null) as BrandDNA | null;
+    const projectBrand = (row.brand_guidelines ?? null) as ProjectBrandGuidelines | null;
+    const prompt      = buildPrompt(row, brand, projectBrand);
 
     console.log('[generate] post:', id, '| prompt:', prompt);
 
     const imageBuffer = await createImageWithGoogle(prompt);
 
-    const storagePath = `enhanced/${post.project_id}/${Date.now()}-post-${id}.jpg`;
+    const storagePath = `enhanced/${row.project_id}/${Date.now()}-post-${id}.jpg`;
     await uploadBuffer(STORAGE_BUCKETS.COMPOSITIONS, storagePath, imageBuffer, 'image/jpeg');
     const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
 
-    // Save the image record and link it to the post in one transaction.
     const imgRes = await query(
       `INSERT INTO images
-         (project_id, image_type, enhanced_url, s3_key, s3_bucket,
-          filename, mime_type, metadata)
+         (project_id, image_type, enhanced_url, s3_key, s3_bucket, filename, mime_type, metadata)
        VALUES ($1, 'enhanced', $2, $3, $4, $5, 'image/jpeg', $6)
        RETURNING id`,
       [
-        post.project_id,
+        row.project_id,
         publicUrl,
         storagePath,
         STORAGE_BUCKETS.COMPOSITIONS,

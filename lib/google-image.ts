@@ -23,8 +23,9 @@ function getClient(): GoogleGenAI {
 
 // ── Model identifiers ─────────────────────────────────────────────────────────
 
-export const CREATION_MODEL = 'imagen-4-ultra';
-export const COMPOSITION_MODEL = 'gemini-3-pro-image-preview';
+export const CREATION_MODEL      = 'imagen-4-ultra';
+export const COMPOSITION_MODEL   = 'gemini-3-pro-image-preview';
+export const EXTRACTION_MODEL    = 'gemini-2.0-flash';
 
 // ============================================================================
 // CREATION  —  imagen-4-ultra
@@ -106,4 +107,34 @@ export async function composeImageWithGoogle(
   }
 
   return Buffer.from(imagePart.inlineData.data, 'base64');
+}
+
+// ============================================================================
+// BRAND EXTRACTION  —  gemini-2.0-flash
+// Parse brand guideline PDFs and/or images into structured JSON.
+// Each file must be provided as { mimeType, data: base64string }.
+// ============================================================================
+
+export async function extractBrandFromDocuments(
+  systemPrompt: string,
+  files: Array<{ mimeType: string; data: string }>,
+): Promise<string> {
+  const ai = getClient();
+
+  const inlineParts = files.map((f) => ({
+    inlineData: { mimeType: f.mimeType, data: f.data },
+  }));
+
+  const response = await ai.models.generateContent({
+    model: EXTRACTION_MODEL,
+    contents: createUserContent([
+      { text: systemPrompt },
+      ...inlineParts,
+    ]),
+    config: { responseMimeType: 'application/json' },
+  });
+
+  const text = response.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text;
+  if (!text) throw new Error('Gemini returned no text for brand extraction');
+  return text;
 }
