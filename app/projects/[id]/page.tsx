@@ -29,6 +29,7 @@ type Post = {
   image_url: string | null;
   image_rating: number | null;
   generating?: boolean;
+  genError?: string;
 };
 
 const STAGES = [
@@ -78,16 +79,16 @@ export default function CampaignDetailPage() {
   };
 
   const generateImage = async (postId: string) => {
-    setPosts(ps => ps.map(p => p.id === postId ? { ...p, generating: true } : p));
+    setPosts(ps => ps.map(p => p.id === postId ? { ...p, generating: true, genError: undefined } : p));
     try {
       const res  = await fetch(`/api/posts/${postId}/generate`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
-      // Navigate straight to the image feedback view.
+      if (!res.ok) throw new Error(data.error || 'Error al generar');
       router.push(`/projects/${projectId}/posts/${postId}?imageId=${data.imageId}`);
     } catch (err) {
       console.error(err);
-      setPosts(ps => ps.map(p => p.id === postId ? { ...p, generating: false } : p));
+      const msg = err instanceof Error ? err.message : 'Error al generar';
+      setPosts(ps => ps.map(p => p.id === postId ? { ...p, generating: false, genError: msg } : p));
     }
   };
 
@@ -216,7 +217,7 @@ export default function CampaignDetailPage() {
                 </div>
 
                 {/* Action */}
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 flex flex-col items-end gap-1">
                   {post.image_id ? (
                     <Link
                       href={`/projects/${projectId}/posts/${post.id}`}
@@ -234,6 +235,9 @@ export default function CampaignDetailPage() {
                       <Sparkles className={`w-3.5 h-3.5 ${post.generating ? 'animate-pulse' : ''}`} />
                       {post.generating ? 'Generando…' : 'Generar'}
                     </button>
+                  )}
+                  {post.genError && (
+                    <p className="text-xs text-red-500 max-w-[160px] text-right">{post.genError}</p>
                   )}
                 </div>
               </div>
