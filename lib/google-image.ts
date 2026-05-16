@@ -23,7 +23,7 @@ function getClient(): GoogleGenAI {
 
 // ── Model identifiers ─────────────────────────────────────────────────────────
 
-export const CREATION_MODEL      = 'imagen-4-ultra';
+export const CREATION_MODEL      = 'imagen-4.0-ultra-generate-001';
 export const COMPOSITION_MODEL   = 'gemini-3-pro-image-preview';
 export const EXTRACTION_MODEL    = 'gemini-2.5-flash';
 
@@ -47,7 +47,7 @@ export async function createImageWithGoogle(
   const response = await ai.models.generateImages({
     model: CREATION_MODEL,
     prompt,
-    config: { numberOfImages: 1, safetyFilterLevel: SafetyFilterLevel.BLOCK_ONLY_HIGH },
+    config: { numberOfImages: 1, safetyFilterLevel: SafetyFilterLevel.BLOCK_LOW_AND_ABOVE },
   });
 
   const imageBytes = response.generatedImages?.[0]?.image?.imageBytes;
