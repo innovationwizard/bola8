@@ -25,7 +25,7 @@ function getClient(): GoogleGenAI {
 
 export const CREATION_MODEL      = 'imagen-4-ultra';
 export const COMPOSITION_MODEL   = 'gemini-3-pro-image-preview';
-export const EXTRACTION_MODEL    = 'gemini-2.0-flash';
+export const EXTRACTION_MODEL    = 'gemini-2.5-flash';
 
 // ============================================================================
 // CREATION  —  imagen-4-ultra
