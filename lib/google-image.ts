@@ -11,6 +11,7 @@
  *                 SDK method: ai.models.generateContent() + responseModalities IMAGE
  */
 
+import sharp from 'sharp';
 import { GoogleGenAI, SafetyFilterLevel, createUserContent } from '@google/genai';
 
 // ── Client singleton ──────────────────────────────────────────────────────────
@@ -31,7 +32,16 @@ export const EXTRACTION_MODEL    = 'gemini-2.5-flash';
 
 export const IMAGE_WIDTH         = 1080;
 export const IMAGE_HEIGHT        = 1350;
-export const IMAGE_ASPECT_RATIO  = '4:5';
+// Imagen 4 Ultra does not support 4:5. Use 3:4 (closest portrait ratio),
+// then resize to exact output dimensions via sharp.
+export const IMAGE_ASPECT_RATIO  = '3:4';
+
+async function resizeToOutput(buf: Buffer): Promise<Buffer> {
+  return sharp(buf)
+    .resize(IMAGE_WIDTH, IMAGE_HEIGHT, { fit: 'cover', position: 'centre' })
+    .jpeg({ quality: 92 })
+    .toBuffer();
+}
 
 // ============================================================================
 // CREATION  —  imagen-4-ultra
@@ -64,7 +74,7 @@ export async function createImageWithGoogle(
     );
   }
 
-  return Buffer.from(imageBytes, 'base64');
+  return resizeToOutput(Buffer.from(imageBytes, 'base64'));
 }
 
 // ============================================================================
@@ -112,7 +122,7 @@ export async function composeImageWithGoogle(
     );
   }
 
-  return Buffer.from(imagePart.inlineData.data, 'base64');
+  return resizeToOutput(Buffer.from(imagePart.inlineData.data, 'base64'));
 }
 
 // ============================================================================
