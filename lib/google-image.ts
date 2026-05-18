@@ -126,6 +126,54 @@ export async function composeImageWithGoogle(
 }
 
 // ============================================================================
+// STYLE ADAPTATION  —  gemini-3-pro-image-preview
+// Take an Imagen-generated base image and shift its visual style to match
+// a set of project reference images without changing the subject or composition.
+// Up to MAX_STYLE_REFS reference images are used (most recent first).
+// ============================================================================
+
+export const MAX_STYLE_REFS = 3;
+
+export async function applyStyleReferences(
+  baseImageBuffer: Buffer,
+  styleRefBuffers: Buffer[],
+): Promise<Buffer> {
+  const ai = getClient();
+
+  const stylePrompt =
+    'You are given a generated marketing image followed by visual style reference images. ' +
+    'Preserve the exact subject, composition, and concept of the generated image. ' +
+    'Adapt its color palette, lighting, texture, mood, and photographic style to closely match the reference images. ' +
+    'Output a single photorealistic image at the same framing.';
+
+  const inlineParts = [
+    { text: stylePrompt },
+    { inlineData: { mimeType: 'image/jpeg', data: baseImageBuffer.toString('base64') } },
+    ...styleRefBuffers.slice(0, MAX_STYLE_REFS).map((buf) => ({
+      inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') },
+    })),
+  ];
+
+  const response = await ai.models.generateContent({
+    model: COMPOSITION_MODEL,
+    contents: createUserContent(inlineParts),
+    config: { responseModalities: ['IMAGE', 'TEXT'] },
+  });
+
+  const parts = response.candidates?.[0]?.content?.parts;
+  const imagePart = parts?.find((p) => p.inlineData?.mimeType?.startsWith('image/'));
+
+  if (!imagePart?.inlineData?.data) {
+    const textPart = parts?.find((p) => p.text);
+    throw new Error(
+      `${COMPOSITION_MODEL} returned no image during style adaptation. Model text: ${textPart?.text ?? '(none)'}`
+    );
+  }
+
+  return resizeToOutput(Buffer.from(imagePart.inlineData.data, 'base64'));
+}
+
+// ============================================================================
 // BRAND EXTRACTION  —  gemini-2.0-flash
 // Parse brand guideline PDFs and/or images into structured JSON.
 // Each file must be provided as { mimeType, data: base64string }.

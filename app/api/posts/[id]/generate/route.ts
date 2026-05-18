@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { createImageWithGoogle, IMAGE_WIDTH, IMAGE_HEIGHT } from '@/lib/google-image';
+import { supabase } from '@/lib/supabase';
+import {
+  createImageWithGoogle,
+  applyStyleReferences,
+  MAX_STYLE_REFS,
+  IMAGE_WIDTH,
+  IMAGE_HEIGHT,
+} from '@/lib/google-image';
 import { STORAGE_BUCKETS, getPublicUrl, uploadBuffer } from '@/lib/storage-utils';
 import { buildBrandPromptSection, type BrandDNA, type ProjectBrandGuidelines } from '@/lib/brand';
 
@@ -44,14 +51,37 @@ export async function POST(
     if (!postRes.rows.length)
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
 
-    const row         = postRes.rows[0];
-    const brand       = (row.brand_dna        ?? null) as BrandDNA | null;
+    const row          = postRes.rows[0];
+    const brand        = (row.brand_dna        ?? null) as BrandDNA | null;
     const projectBrand = (row.brand_guidelines ?? null) as ProjectBrandGuidelines | null;
-    const prompt      = buildPrompt(row, brand, projectBrand);
+    const prompt       = buildPrompt(row, brand, projectBrand);
 
     console.log('[generate] post:', id, '| prompt:', prompt);
 
-    const imageBuffer = await createImageWithGoogle(prompt);
+    // Fetch up to MAX_STYLE_REFS reference images for this project.
+    const refRes = await query(
+      `SELECT storage_path FROM project_reference_images
+        WHERE project_id = $1
+        ORDER BY display_order ASC, created_at ASC
+        LIMIT $2`,
+      [row.project_id, MAX_STYLE_REFS]
+    );
+
+    let imageBuffer = await createImageWithGoogle(prompt);
+
+    if (refRes.rows.length > 0) {
+      const styleBuffers = await Promise.all(
+        refRes.rows.map(async (r: { storage_path: string }) => {
+          const { data, error } = await supabase.storage
+            .from(STORAGE_BUCKETS.UPLOADS)
+            .download(r.storage_path);
+          if (error) throw new Error(`Reference image download failed: ${error.message}`);
+          return Buffer.from(await data.arrayBuffer());
+        })
+      );
+      console.log('[generate] applying', styleBuffers.length, 'style reference(s)');
+      imageBuffer = await applyStyleReferences(imageBuffer, styleBuffers);
+    }
 
     const storagePath = `enhanced/${row.project_id}/${Date.now()}-post-${id}.jpg`;
     await uploadBuffer(STORAGE_BUCKETS.COMPOSITIONS, storagePath, imageBuffer, 'image/jpeg');
