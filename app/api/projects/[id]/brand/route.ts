@@ -8,7 +8,7 @@ export async function GET(
   try {
     const { id } = await params;
     const result = await query(
-      `SELECT p.brand_guidelines, c.id AS client_id, c.brand_dna
+      `SELECT p.project_name, p.brand_guidelines, c.id AS client_id, c.brand_dna
          FROM projects p
          LEFT JOIN clients c ON c.id = p.client_id
         WHERE p.id = $1`,

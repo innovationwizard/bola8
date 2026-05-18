@@ -141,6 +141,22 @@ export default function CampaignDetailPage() {
                     Brand DNA
                   </Link>
                 )}
+                <Link
+                  href={`/projects/${projectId}/brand`}
+                  className={`inline-flex items-center gap-1.5 text-xs underline-offset-2 transition-colors ${
+                    project.has_project_brand
+                      ? 'text-neutral-400 underline hover:text-neutral-700'
+                      : 'text-amber-600 underline hover:text-amber-800 font-medium'
+                  }`}
+                >
+                  {!project.has_project_brand && (
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                    </span>
+                  )}
+                  Brand del proyecto
+                </Link>
               </div>
             </div>
             {total > 0 && (

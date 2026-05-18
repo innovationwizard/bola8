@@ -137,6 +137,25 @@ export function buildBrandPromptSection(
   return lines.join(' ');
 }
 
+// Extraction prompt for project-specific brand guidelines.
+export const PROJECT_BRAND_EXTRACTION_PROMPT = `You are a brand identity extraction specialist analyzing project-specific creative briefs, mood boards, and brand documents for a real-estate development.
+
+Extract every piece of project-specific visual direction present in the provided files and return it as valid JSON matching this exact schema. Extract only what is explicitly stated or clearly demonstrated. Do not invent or infer data not present in the materials. Use null for missing strings and [] for missing arrays.
+
+Return ONLY the JSON object, no markdown, no explanation:
+
+{
+  "mood": "string or null",
+  "target_audience": "string or null",
+  "key_differentiators": "string or null",
+  "photography_direction": "string or null",
+  "atmosphere": "string or null",
+  "colors": {
+    "accent": [{ "name": "string", "hex": "#rrggbb", "usage": "string" }]
+  },
+  "do_not": ["string"]
+}`;
+
 // The extraction prompt sent to Gemini when parsing brand documents.
 export const BRAND_EXTRACTION_PROMPT = `You are a brand identity extraction specialist analyzing brand guideline documents.
 
