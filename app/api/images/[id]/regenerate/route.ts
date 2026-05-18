@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 import { composeImageWithGoogle } from '@/lib/google-image';
 import { STORAGE_BUCKETS, getPublicUrl, uploadBuffer } from '@/lib/storage-utils';
 import { saveImageToDatabase } from '@/lib/db/image-storage';
@@ -66,7 +67,8 @@ export async function POST(
     const { id } = await params;
 
     const imgRes = await query(
-      `SELECT i.id, i.enhanced_url, i.original_url, i.project_id, i.filename, i.mime_type,
+      `SELECT i.id, i.enhanced_url, i.original_url, i.s3_key, i.s3_bucket,
+              i.project_id, i.filename, i.mime_type,
               pr.brand_guidelines,
               c.brand_dna
          FROM images i
@@ -78,10 +80,9 @@ export async function POST(
     if (!imgRes.rows.length)
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
 
-    const image       = imgRes.rows[0];
-    const currentUrl  = image.enhanced_url || image.original_url;
-    if (!currentUrl)
-      return NextResponse.json({ error: 'No image URL to regenerate from' }, { status: 400 });
+    const image = imgRes.rows[0];
+    if (!image.s3_key || !image.s3_bucket)
+      return NextResponse.json({ error: 'No storage path to regenerate from' }, { status: 400 });
 
     const brand        = (image.brand_dna        ?? null) as BrandDNA | null;
     const projectBrand = (image.brand_guidelines ?? null) as ProjectBrandGuidelines | null;
@@ -103,9 +104,11 @@ export async function POST(
 
     console.log('[regenerate] prompt:', prompt);
 
-    const fetchRes = await fetch(currentUrl);
-    if (!fetchRes.ok) throw new Error(`Failed to fetch image from storage: ${fetchRes.status}`);
-    const imageBuffer = Buffer.from(await fetchRes.arrayBuffer());
+    const { data: storageBlob, error: storageError } = await supabase.storage
+      .from(image.s3_bucket)
+      .download(image.s3_key);
+    if (storageError) throw new Error(`Storage download failed: ${storageError.message}`);
+    const imageBuffer = Buffer.from(await storageBlob.arrayBuffer());
 
     const newBuffer = await composeImageWithGoogle(imageBuffer, prompt);
 

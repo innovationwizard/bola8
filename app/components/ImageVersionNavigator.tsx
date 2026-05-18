@@ -102,8 +102,8 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
   const goToNext     = () => { if (hasNext)      setCurrentIndex(currentIndex + 1); };
   const goToVersion  = (i: number) => { if (i >= 0 && i < versions.length) setCurrentIndex(i); };
 
-  const getImageUrl    = (v: ImageVersion) => v.isOriginal ? v.original_url : (v.enhanced_url || v.original_url);
-  const getVersionLabel = (v: ImageVersion) => v.isOriginal ? 'Original' : `Versión ${v.version}`;
+  const getImageUrl    = (v: ImageVersion) => `/api/images/${v.id}/file`;
+  const getVersionLabel = (v: ImageVersion) => (v.isOriginal || v.version === 0) ? 'Original' : `Versión ${v.version}`;
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -188,16 +188,14 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
               <Clock className="w-3.5 h-3.5" />
               {formatDate(currentVersion.created_at)}
             </span>
-            {getImageUrl(currentVersion) && (
-              <a
-                href={getImageUrl(currentVersion) || '#'}
-                download
-                className="text-xs text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Descargar
-              </a>
-            )}
+            <a
+              href={getImageUrl(currentVersion)}
+              download={currentVersion.filename || `imagen-${currentVersion.id}.jpg`}
+              className="text-xs text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Descargar
+            </a>
           </div>
         </div>
       </div>
@@ -205,16 +203,12 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
       {/* Image */}
       <div className="relative bg-gray-50">
         <div className="aspect-video flex items-center justify-center p-8">
-          {getImageUrl(currentVersion) ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={getImageUrl(currentVersion) || ''}
-              alt={getVersionLabel(currentVersion)}
-              className="max-w-full max-h-full object-contain rounded"
-            />
-          ) : (
-            <p className="text-sm text-gray-400">Imagen no disponible</p>
-          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={getImageUrl(currentVersion)}
+            alt={getVersionLabel(currentVersion)}
+            className="max-w-full max-h-full object-contain rounded"
+          />
         </div>
 
         {versions.length > 1 && (
@@ -328,14 +322,8 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
                   className={`flex-shrink-0 relative group transition-all ${isActive ? 'ring-2 ring-gray-900' : 'opacity-60 hover:opacity-100'}`}
                 >
                   <div className="w-16 h-16 rounded border border-gray-200 overflow-hidden bg-gray-100">
-                    {imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={imageUrl} alt={getVersionLabel(version)} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
-                        {version.isOriginal ? 'O' : version.version}
-                      </div>
-                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imageUrl} alt={getVersionLabel(version)} className="w-full h-full object-cover" />
                   </div>
                   {hasRating && (() => {
                     const R = RATINGS.find(r => r.value === version.rating);
