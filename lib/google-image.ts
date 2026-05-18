@@ -27,6 +27,12 @@ export const CREATION_MODEL      = 'imagen-4.0-ultra-generate-001';
 export const COMPOSITION_MODEL   = 'gemini-3-pro-image-preview';
 export const EXTRACTION_MODEL    = 'gemini-2.5-flash';
 
+// ── Output dimensions (hard rule — all generated & regenerated images) ────────
+
+export const IMAGE_WIDTH         = 1080;
+export const IMAGE_HEIGHT        = 1350;
+export const IMAGE_ASPECT_RATIO  = '4:5';
+
 // ============================================================================
 // CREATION  —  imagen-4-ultra
 // Generate a photorealistic scene from a text prompt.
@@ -47,7 +53,7 @@ export async function createImageWithGoogle(
   const response = await ai.models.generateImages({
     model: CREATION_MODEL,
     prompt,
-    config: { numberOfImages: 1, safetyFilterLevel: SafetyFilterLevel.BLOCK_LOW_AND_ABOVE },
+    config: { numberOfImages: 1, aspectRatio: IMAGE_ASPECT_RATIO, safetyFilterLevel: SafetyFilterLevel.BLOCK_LOW_AND_ABOVE },
   });
 
   const imageBytes = response.generatedImages?.[0]?.image?.imageBytes;

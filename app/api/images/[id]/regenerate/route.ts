@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
-import { composeImageWithGoogle } from '@/lib/google-image';
+import { composeImageWithGoogle, IMAGE_WIDTH, IMAGE_HEIGHT } from '@/lib/google-image';
 import { STORAGE_BUCKETS, getPublicUrl, uploadBuffer } from '@/lib/storage-utils';
 import { saveImageToDatabase } from '@/lib/db/image-storage';
 import { buildBrandPromptSection, type BrandDNA, type ProjectBrandGuidelines } from '@/lib/brand';
@@ -38,7 +38,7 @@ function buildPrompt(
   projectBrand: ProjectBrandGuidelines | null,
 ): string {
   const parts: string[] = [
-    'Ultra-realistic photorealistic marketing image. 8k, sharp focus, professional studio lighting, clean composition, brand-ready commercial photography.',
+    `Ultra-realistic photorealistic marketing image. ${IMAGE_WIDTH}x${IMAGE_HEIGHT}px portrait 4:5. 8k, sharp focus, professional studio lighting, clean composition, brand-ready commercial photography.`,
   ];
 
   const brandSection = buildBrandPromptSection(brand, projectBrand);
