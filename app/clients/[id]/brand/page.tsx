@@ -212,9 +212,32 @@ export default function BrandEditorPage() {
     setParsing(true);
     setParseError(null);
     try {
-      const form = new FormData();
-      parseFiles.forEach(f => form.append('files', f));
-      const res  = await fetch(`/api/clients/${clientId}/brand/parse`, { method: 'POST', body: form });
+      // 1 — upload each file directly to Supabase Storage (bypasses Vercel body limit)
+      const uploaded: { path: string; mimeType: string }[] = [];
+      for (const file of parseFiles) {
+        const urlRes = await fetch(`/api/clients/${clientId}/brand/upload-url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name }),
+        });
+        if (!urlRes.ok) throw new Error('No se pudo obtener la URL de carga');
+        const { signedUrl, path } = await urlRes.json();
+
+        const uploadRes = await fetch(signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+        if (!uploadRes.ok) throw new Error(`Error al subir "${file.name}"`);
+        uploaded.push({ path, mimeType: file.type });
+      }
+
+      // 2 — ask the server to extract brand DNA from the stored paths
+      const res = await fetch(`/api/clients/${clientId}/brand/parse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: uploaded }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al procesar los archivos');
       setBrand(data.brand_dna);
