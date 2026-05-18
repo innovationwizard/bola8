@@ -7,7 +7,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const { rating, liked_aspects, improvement_notes } = await request.json();
+    const { rating, liked_aspects, improvement_notes, reference_image_id } = await request.json();
 
     if (!rating || rating < 1 || rating > 5) {
       return NextResponse.json({ error: 'rating must be 1–5' }, { status: 400 });
@@ -15,12 +15,13 @@ export async function POST(
 
     await query(
       `UPDATE images
-          SET rating            = $1,
-              liked_aspects     = $2,
-              improvement_notes = $3,
-              updated_at        = NOW()
-        WHERE id = $4`,
-      [rating, liked_aspects || null, improvement_notes || null, id]
+          SET rating             = $1,
+              liked_aspects      = $2,
+              improvement_notes  = $3,
+              reference_image_id = $4,
+              updated_at         = NOW()
+        WHERE id = $5`,
+      [rating, liked_aspects || null, improvement_notes || null, reference_image_id || null, id]
     );
 
     return NextResponse.json({ ok: true });

@@ -93,7 +93,7 @@ export default function PostDetailPage() {
 
         {/* Image feedback loop */}
         {post.image_id ? (
-          <ImageVersionNavigator imageId={post.image_id} />
+          <ImageVersionNavigator imageId={post.image_id} projectId={projectId} />
         ) : (
           <div className="bg-white border border-neutral-200 rounded-2xl p-12 text-center">
             <p className="text-sm text-neutral-400">

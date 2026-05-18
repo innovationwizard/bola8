@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Download, Sparkles, Palette, Sun, Wand2, Clock, Plus, RefreshCw, ThumbsDown, Frown, Meh, Smile, ThumbsUp } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ChevronLeft, ChevronRight, Download, Sparkles, Palette, Sun, Wand2, Clock, Plus, RefreshCw, ThumbsDown, Frown, Meh, Smile, ThumbsUp, ImageIcon, Upload, X, Loader2 } from 'lucide-react';
 
 interface ImageVersion {
   id: string;
@@ -16,10 +16,18 @@ interface ImageVersion {
   rating: number | null;
   liked_aspects: string | null;
   improvement_notes: string | null;
+  reference_image_id: string | null;
+}
+
+interface ProjectRefImage {
+  id: string;
+  url: string;
+  storage_path: string;
 }
 
 interface ImageVersionNavigatorProps {
   imageId: string;
+  projectId: string;
   className?: string;
 }
 
@@ -51,16 +59,22 @@ interface FeedbackDraft {
   rating: number | null;
   liked: string;
   improve: string;
+  referenceImageId: string | null;
 }
 
-export default function ImageVersionNavigator({ imageId, className = '' }: ImageVersionNavigatorProps) {
-  const [versions, setVersions]       = useState<ImageVersion[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState<string | null>(null);
-  const [draft, setDraft]             = useState<FeedbackDraft>({ rating: null, liked: '', improve: '' });
-  const [regenerating, setRegenerating] = useState(false);
-  const [regenError, setRegenError]   = useState<string | null>(null);
+export default function ImageVersionNavigator({ imageId, projectId, className = '' }: ImageVersionNavigatorProps) {
+  const [versions, setVersions]           = useState<ImageVersion[]>([]);
+  const [currentIndex, setCurrentIndex]   = useState(0);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
+  const [draft, setDraft]                 = useState<FeedbackDraft>({ rating: null, liked: '', improve: '', referenceImageId: null });
+  const [regenerating, setRegenerating]   = useState(false);
+  const [regenError, setRegenError]       = useState<string | null>(null);
+
+  const [projectRefs, setProjectRefs]     = useState<ProjectRefImage[]>([]);
+  const [refUploading, setRefUploading]   = useState(false);
+  const [refUploadError, setRefUploadError] = useState<string | null>(null);
+  const refFileInputRef                   = useRef<HTMLInputElement>(null);
 
   const fetchVersions = useCallback(async (): Promise<ImageVersion[]> => {
     try {
@@ -82,18 +96,31 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
     }
   }, [imageId]);
 
+  const fetchProjectRefs = useCallback(async () => {
+    try {
+      const res  = await fetch(`/api/projects/${projectId}/reference-images`);
+      const data = await res.json();
+      setProjectRefs(data.referenceImages ?? []);
+    } catch {
+      // Non-fatal — reference image picker degrades gracefully
+    }
+  }, [projectId]);
+
   useEffect(() => { fetchVersions(); }, [fetchVersions]);
+  useEffect(() => { fetchProjectRefs(); }, [fetchProjectRefs]);
 
   // Pre-populate draft when navigating to a version that already has feedback.
   useEffect(() => {
     const v = versions[currentIndex];
     if (!v) return;
     setDraft({
-      rating:  v.rating ?? null,
-      liked:   v.liked_aspects ?? '',
-      improve: v.improvement_notes ?? '',
+      rating:           v.rating ?? null,
+      liked:            v.liked_aspects ?? '',
+      improve:          v.improvement_notes ?? '',
+      referenceImageId: v.reference_image_id ?? null,
     });
     setRegenError(null);
+    setRefUploadError(null);
   }, [currentIndex, versions]);
 
   const currentVersion = versions[currentIndex];
@@ -104,26 +131,72 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
   const goToNext     = () => { if (hasNext)      setCurrentIndex(currentIndex + 1); };
   const goToVersion  = (i: number) => { if (i >= 0 && i < versions.length) setCurrentIndex(i); };
 
-  const getImageUrl    = (v: ImageVersion) => `/api/images/${v.id}/file`;
+  const getImageUrl     = (v: ImageVersion) => `/api/images/${v.id}/file`;
   const getVersionLabel = (v: ImageVersion) => (v.isOriginal || v.version === 0) ? 'Original' : `Versión ${v.version}`;
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const handleRefImageUpload = async (file: File) => {
+    setRefUploading(true);
+    setRefUploadError(null);
+    try {
+      // 1 — get signed URL (saves to project reference images library)
+      const urlRes = await fetch(`/api/projects/${projectId}/reference-images/upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name }),
+      });
+      if (!urlRes.ok) throw new Error('No se pudo obtener la URL de carga');
+      const { signedUrl, path } = await urlRes.json();
+
+      // 2 — PUT directly to Supabase
+      const uploadRes = await fetch(signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error('Error al subir la imagen');
+
+      // 3 — save record to project reference images library
+      const saveRes = await fetch(`/api/projects/${projectId}/reference-images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath: path }),
+      });
+      if (!saveRes.ok) throw new Error('Error al guardar la imagen de referencia');
+      const { referenceImage } = await saveRes.json();
+
+      // 4 — add to local list and auto-select
+      setProjectRefs(prev => [...prev, referenceImage]);
+      setDraft(d => ({ ...d, referenceImageId: referenceImage.id }));
+    } catch (err) {
+      setRefUploadError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setRefUploading(false);
+      if (refFileInputRef.current) refFileInputRef.current.value = '';
+    }
+  };
 
   const handleRegenerate = async () => {
     if (!currentVersion || !draft.rating) return;
     setRegenerating(true);
     setRegenError(null);
     try {
-      // 1 — persist the feedback for this version
+      // 1 — persist feedback (including optional reference image)
       const fbRes = await fetch(`/api/images/${currentVersion.id}/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating: draft.rating, liked_aspects: draft.liked, improvement_notes: draft.improve }),
+        body: JSON.stringify({
+          rating:             draft.rating,
+          liked_aspects:      draft.liked,
+          improvement_notes:  draft.improve,
+          reference_image_id: draft.referenceImageId,
+        }),
       });
       if (!fbRes.ok) throw new Error('No se pudo guardar el feedback');
 
-      // 2 — regenerate from this version using accumulated feedback
+      // 2 — regenerate using accumulated feedback + reference images
       const rgRes = await fetch(`/api/images/${currentVersion.id}/regenerate`, { method: 'POST' });
       if (!rgRes.ok) {
         const err = await rgRes.json().catch(() => ({}));
@@ -157,6 +230,8 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
       <p className="text-sm text-gray-400">No se encontraron versiones</p>
     </div>
   );
+
+  const selectedRef = projectRefs.find(r => r.id === draft.referenceImageId);
 
   return (
     <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
@@ -276,7 +351,91 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
             />
           </div>
 
-          {/* 4 — Action row */}
+          {/* 4 — Reference image (optional) */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs uppercase tracking-[0.15em] text-gray-400">
+                Imagen de referencia — opcional
+              </label>
+              <div className="flex items-center gap-2">
+                {selectedRef && (
+                  <button
+                    onClick={() => setDraft(d => ({ ...d, referenceImageId: null }))}
+                    className="text-xs text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
+                  >
+                    <X className="w-3 h-3" />
+                    Quitar
+                  </button>
+                )}
+                <button
+                  onClick={() => refFileInputRef.current?.click()}
+                  disabled={refUploading}
+                  className="text-xs text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1 disabled:opacity-40"
+                >
+                  {refUploading
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Upload className="w-3 h-3" />
+                  }
+                  {refUploading ? 'Subiendo…' : 'Subir nueva'}
+                </button>
+                <input
+                  ref={refFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => { if (e.target.files?.[0]) handleRefImageUpload(e.target.files[0]); }}
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400 mb-3">
+              Si esta imagen no se parece a lo que buscas, selecciona o sube una referencia visual.
+            </p>
+
+            {projectRefs.length === 0 && !refUploading && (
+              <button
+                onClick={() => refFileInputRef.current?.click()}
+                className="w-full border border-dashed border-gray-200 rounded-lg px-4 py-4 flex items-center justify-center gap-2 text-xs text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <ImageIcon className="w-4 h-4" />
+                Sin imágenes de referencia — clic para subir una
+              </button>
+            )}
+
+            {projectRefs.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {projectRefs.map(ref => {
+                  const isSelected = draft.referenceImageId === ref.id;
+                  return (
+                    <button
+                      key={ref.id}
+                      onClick={() => setDraft(d => ({
+                        ...d,
+                        referenceImageId: d.referenceImageId === ref.id ? null : ref.id,
+                      }))}
+                      className={`flex-shrink-0 relative rounded-lg overflow-hidden border-2 transition-all ${
+                        isSelected
+                          ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-1'
+                          : 'border-transparent opacity-60 hover:opacity-100 hover:border-gray-300'
+                      }`}
+                      title={isSelected ? 'Quitar selección' : 'Usar como referencia'}
+                    >
+                      <div className="w-16 h-16 bg-gray-100">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={ref.url} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {refUploadError && (
+              <p className="text-xs text-red-500 mt-2">{refUploadError}</p>
+            )}
+          </div>
+
+          {/* 5 — Action row */}
           <div className="flex items-center gap-3 pt-1">
             <button
               onClick={handleRegenerate}
@@ -302,9 +461,9 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
         <div className="px-6 py-4 border-t border-gray-100">
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {versions.map((version, index) => {
-              const isActive   = index === currentIndex;
-              const imageUrl   = getImageUrl(version);
-              const hasRating  = version.rating != null;
+              const isActive  = index === currentIndex;
+              const imageUrl  = getImageUrl(version);
+              const hasRating = version.rating != null;
               return (
                 <button
                   key={version.id}

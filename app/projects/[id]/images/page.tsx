@@ -252,7 +252,7 @@ export default function ProjectImagesPage() {
                       Asignar a Espacios
                     </button>
                   </div>
-                  <ImageVersionNavigator imageId={selectedImageId} />
+                  <ImageVersionNavigator imageId={selectedImageId} projectId={projectId} />
                 </div>
               )}
             </div>

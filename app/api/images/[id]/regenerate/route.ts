@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
-import { composeImageWithGoogle, IMAGE_WIDTH, IMAGE_HEIGHT } from '@/lib/google-image';
+import { composeImageWithGoogle, MAX_STYLE_REFS, IMAGE_WIDTH, IMAGE_HEIGHT } from '@/lib/google-image';
 import { STORAGE_BUCKETS, getPublicUrl, uploadBuffer } from '@/lib/storage-utils';
 import { saveImageToDatabase } from '@/lib/db/image-storage';
 import { buildBrandPromptSection, type BrandDNA, type ProjectBrandGuidelines } from '@/lib/brand';
@@ -17,7 +17,7 @@ async function findRootId(imageId: string): Promise<string> {
 
 async function collectFeedback(rootId: string) {
   const res = await query(
-    `SELECT rating, liked_aspects, improvement_notes, created_at
+    `SELECT rating, liked_aspects, improvement_notes, reference_image_id, created_at
        FROM images
       WHERE (id = $1 OR parent_image_id = $1)
         AND (liked_aspects IS NOT NULL OR improvement_notes IS NOT NULL)
@@ -28,6 +28,7 @@ async function collectFeedback(rootId: string) {
     rating: number | null;
     liked_aspects: string | null;
     improvement_notes: string | null;
+    reference_image_id: string | null;
   }[];
 }
 
@@ -104,13 +105,37 @@ export async function POST(
 
     console.log('[regenerate] prompt:', prompt);
 
+    // Collect unique reference image storage paths from feedback history.
+    const refImageIds = [...new Set(
+      feedback.map(f => f.reference_image_id).filter((id): id is string => !!id)
+    )].slice(0, MAX_STYLE_REFS);
+
+    let styleRefBuffers: Buffer[] | undefined;
+    if (refImageIds.length > 0) {
+      const placeholders = refImageIds.map((_, i) => `$${i + 1}`).join(', ');
+      const refRes = await query(
+        `SELECT storage_path FROM project_reference_images WHERE id IN (${placeholders})`,
+        refImageIds
+      );
+      styleRefBuffers = await Promise.all(
+        refRes.rows.map(async (r: { storage_path: string }) => {
+          const { data, error } = await supabase.storage
+            .from(STORAGE_BUCKETS.UPLOADS)
+            .download(r.storage_path);
+          if (error) throw new Error(`Reference image download failed: ${error.message}`);
+          return Buffer.from(await data.arrayBuffer());
+        })
+      );
+      console.log('[regenerate] using', styleRefBuffers.length, 'feedback reference image(s)');
+    }
+
     const { data: storageBlob, error: storageError } = await supabase.storage
       .from(image.s3_bucket)
       .download(image.s3_key);
     if (storageError) throw new Error(`Storage download failed: ${storageError.message}`);
     const imageBuffer = Buffer.from(await storageBlob.arrayBuffer());
 
-    const newBuffer = await composeImageWithGoogle(imageBuffer, prompt);
+    const newBuffer = await composeImageWithGoogle(imageBuffer, prompt, styleRefBuffers);
 
     const safeName    = (image.filename || 'regen.jpg').replace(/[^a-zA-Z0-9._-]/g, '-');
     const storagePath = `enhanced/${image.project_id}/${Date.now()}-regen-${safeName}`;

@@ -86,21 +86,29 @@ export async function createImageWithGoogle(
 
 export async function composeImageWithGoogle(
   imageBuffer: Buffer,
-  prompt: string
+  prompt: string,
+  styleRefBuffers?: Buffer[],
 ): Promise<Buffer> {
   const ai = getClient();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const requestParts: any[] = [
+    { text: prompt },
+    { inlineData: { mimeType: 'image/jpeg', data: imageBuffer.toString('base64') } },
+  ];
+
+  if (styleRefBuffers?.length) {
+    requestParts.push({
+      text: 'Style reference images — adapt the visual style, palette, lighting, and mood of the result to match these references while preserving the subject and composition above:',
+    });
+    for (const buf of styleRefBuffers.slice(0, MAX_STYLE_REFS)) {
+      requestParts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
+    }
+  }
+
   const response = await ai.models.generateContent({
     model: COMPOSITION_MODEL,
-    contents: createUserContent([
-      { text: prompt },
-      {
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: imageBuffer.toString('base64'),
-        },
-      },
-    ]),
+    contents: createUserContent(requestParts),
     config: {
       responseModalities: ['IMAGE', 'TEXT'],
     },
@@ -146,7 +154,8 @@ export async function applyStyleReferences(
     'Adapt its color palette, lighting, texture, mood, and photographic style to closely match the reference images. ' +
     'Output a single photorealistic image at the same framing.';
 
-  const inlineParts = [
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inlineParts: any[] = [
     { text: stylePrompt },
     { inlineData: { mimeType: 'image/jpeg', data: baseImageBuffer.toString('base64') } },
     ...styleRefBuffers.slice(0, MAX_STYLE_REFS).map((buf) => ({
