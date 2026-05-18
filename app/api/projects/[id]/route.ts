@@ -10,10 +10,11 @@ export async function GET(
     const { id } = await params;
     const projectId = id;
 
-    // Get project + whether its client already has brand DNA defined.
+    // Get project + brand readiness flags for both client and project levels.
     const projectResult = await query(
       `SELECT p.*,
-              (c.brand_dna IS NOT NULL) AS client_has_brand_dna
+              (c.brand_dna       IS NOT NULL) AS client_has_brand_dna,
+              (p.brand_guidelines IS NOT NULL) AS has_project_brand
          FROM projects p
          LEFT JOIN clients c ON c.id = p.client_id
         WHERE p.id = $1`,

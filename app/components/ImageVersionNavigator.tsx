@@ -62,7 +62,7 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
   const [regenerating, setRegenerating] = useState(false);
   const [regenError, setRegenError]   = useState<string | null>(null);
 
-  const fetchVersions = useCallback(async () => {
+  const fetchVersions = useCallback(async (): Promise<ImageVersion[]> => {
     try {
       setLoading(true);
       setError(null);
@@ -73,8 +73,10 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
       setVersions(vs);
       const idx = vs.findIndex((v) => v.id === imageId);
       setCurrentIndex(idx >= 0 ? idx : vs.length - 1);
+      return vs;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
+      return [];
     } finally {
       setLoading(false);
     }
@@ -128,27 +130,15 @@ export default function ImageVersionNavigator({ imageId, className = '' }: Image
         throw new Error(err.error || 'La regeneración falló');
       }
 
-      // 3 — reload all versions and jump to the new one (last)
-      await fetchVersions();
-      // fetchVersions sets currentIndex to the initial imageId position;
-      // after regen we want the newest version, which will be last.
-      setCurrentIndex((prev) => {
-        void prev; // will be overridden below
-        return -1; // trigger the effect below
-      });
+      // 3 — reload all versions and jump to the newest one
+      const updated = await fetchVersions();
+      setCurrentIndex(updated.length - 1);
     } catch (err) {
       setRegenError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setRegenerating(false);
     }
   };
-
-  // After fetchVersions resolves, jump to the latest version.
-  useEffect(() => {
-    if (currentIndex === -1 && versions.length > 0) {
-      setCurrentIndex(versions.length - 1);
-    }
-  }, [currentIndex, versions]);
 
   if (loading) return (
     <div className={`flex items-center justify-center py-12 ${className}`}>

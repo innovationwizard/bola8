@@ -10,6 +10,7 @@ type Project = {
   client_id: string | null;
   client_name: string;
   client_has_brand_dna: boolean;
+  has_project_brand: boolean;
   project_name: string;
   status: string;
   notes: string;
