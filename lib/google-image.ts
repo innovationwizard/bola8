@@ -450,3 +450,45 @@ export async function generateFeaturedLayer(
     { ...ctx, layerType: 'featured' },
   );
 }
+
+const ORNAMENTS_FRAMING =
+  'You are generating ONLY the ORNAMENTAL OBJECTS layer of a real-estate ' +
+  'marketing image — small atmospheric props arranged as compositional accents ' +
+  '(lamp posts, benches, planters, flowers, balloons, string lights, decorative ' +
+  'signage, garden furniture). Photorealistic, 1080×1350 portrait. ' +
+  'CRITICAL: render the ornamental objects isolated on a clean NEUTRAL WHITE ' +
+  'BACKGROUND so they can be cut out and composited in Photoshop. Do not ' +
+  'render any building, any large central subject, any people, any sky, any ' +
+  'text. Treat these as accents, not focal points — distributed across the ' +
+  'frame to add depth and atmosphere, not to dominate the composition.';
+
+/**
+ * Ornamental objects layer — atmospheric accents (lamps, benches, flowers,
+ * seasonal decor). Optional layer; the asset-pack route decides whether to
+ * generate based on post content (e.g. "flower day" → yellow balloons +
+ * floral arrangements).
+ *
+ * Two-step pipeline (Imagen base → Gemini style adaptation) so ornaments
+ * match the post's Pinterest Inspo aesthetic when style refs exist.
+ *
+ * Output is opaque PNG/JPEG. Asset-pack pipeline runs through Bria for transparency.
+ */
+export async function generateOrnamentsLayer(
+  prompt:          string,
+  styleRefBuffers: Buffer[]    = [],
+  ctx:             CallContext = {},
+): Promise<Buffer> {
+  const baseBuffer = await createImageWithGoogle(
+    `${ORNAMENTS_FRAMING} ${prompt}`,
+    undefined,
+    { ...ctx, layerType: 'ornaments' },
+  );
+
+  if (styleRefBuffers.length === 0) return baseBuffer;
+
+  return applyStyleReferences(
+    baseBuffer,
+    styleRefBuffers,
+    { ...ctx, layerType: 'ornaments' },
+  );
+}
