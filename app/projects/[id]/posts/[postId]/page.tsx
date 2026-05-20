@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import ImageVersionNavigator from '@/app/components/ImageVersionNavigator';
+import PostReferenceImages from '@/app/components/PostReferenceImages';
 
 type Post = {
   id: string;
@@ -90,6 +91,9 @@ export default function PostDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Pinterest Inspo */}
+        <PostReferenceImages postId={postId} projectId={projectId} />
 
         {/* Image feedback loop */}
         {post.image_id ? (
