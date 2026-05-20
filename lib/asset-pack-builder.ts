@@ -18,9 +18,23 @@
 
 import { query }                           from '@/lib/db';
 import { supabase }                        from '@/lib/supabase';
-import { STORAGE_BUCKETS, uploadBuffer }   from '@/lib/storage-utils';
-import type { BrandDNA, ProjectBrandGuidelines } from '@/lib/brand';
-import type { StyleCard }                  from '@/lib/style-card';
+import { STORAGE_BUCKETS, uploadBuffer, getPublicUrl } from '@/lib/storage-utils';
+import {
+  buildBrandPromptSection,
+  type BrandDNA,
+  type ProjectBrandGuidelines,
+} from '@/lib/brand';
+import { buildStyleCard, type StyleCard }  from '@/lib/style-card';
+import {
+  createImageWithGoogle,
+  generateFromRender,
+  generateBackgroundLayer,
+  generateEnvironmentLayer,
+  generateFeaturedLayer,
+  generateOrnamentsLayer,
+  generatePeopleLayer,
+} from '@/lib/google-image';
+import { getBuildingLayer, removeBackground } from '@/lib/bria';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -206,4 +220,205 @@ export async function insertLayerImage(args: {
     ],
   );
   return res.rows[0].id as string;
+}
+
+// ── Prompt construction (shared by per-layer + hybrid orchestrators) ──────────
+
+const FORMATO_NOTES: Record<string, string> = {
+  'Reel':     'Vertical video-cover format. Bold single visual, strong focal point, minimal scene complexity.',
+  'Carrusel': 'First slide of a carousel. Composition must work as standalone and invite swiping right.',
+  'Story':    'Ephemeral story format. Full-bleed vertical, bold visual impact, immediate read.',
+  'Post':     'Standard portrait feed post. Balanced composition with breathing room.',
+};
+
+/**
+ * Build the brand + project + post prompt fragment. Each layer generator
+ * adds its own framing on top of this (so we deliberately skip the
+ * "Ultra-realistic photorealistic..." preamble used by the legacy generate
+ * route — layer FRAMING strings already cover composition + dimensions).
+ */
+function buildPackPrompt(ctx: BuildContext): string {
+  const parts: string[] = [];
+
+  const brandSection = buildBrandPromptSection(ctx.brand, ctx.projectBrand);
+  if (brandSection) parts.push(brandSection);
+
+  if (ctx.post.formato && FORMATO_NOTES[ctx.post.formato])
+    parts.push(`Format: ${FORMATO_NOTES[ctx.post.formato]}`);
+
+  if (ctx.post.idea)          parts.push(`Concept: ${ctx.post.idea}.`);
+  if (ctx.post.descripcion)   parts.push(`Brief: ${ctx.post.descripcion}.`);
+  if (ctx.post.texto_en_arte) parts.push(`Display text (reference only, do not render): "${ctx.post.texto_en_arte}".`);
+
+  return parts.join(' ');
+}
+
+// ── Reference image downloads ─────────────────────────────────────────────────
+
+async function downloadUploadsBuffer(storagePath: string): Promise<Buffer> {
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKETS.UPLOADS)
+    .download(storagePath);
+  if (error) throw new Error(`Storage download failed (${storagePath}): ${error.message}`);
+  return Buffer.from(await data.arrayBuffer());
+}
+
+// ── Per-layer job runner — catches individual layer failures ──────────────────
+
+interface LayerJobResult {
+  layerType:           LayerType;
+  buffer:              Buffer | null;     // null when generation failed
+  transparencyApplied: boolean;
+  error:               string | null;
+}
+
+async function runLayerJob(
+  layerType: LayerType,
+  factory:   () => Promise<{ buffer: Buffer; transparencyApplied: boolean }>,
+): Promise<LayerJobResult> {
+  try {
+    const r = await factory();
+    return { layerType, buffer: r.buffer, transparencyApplied: r.transparencyApplied, error: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[asset-pack] layer "${layerType}" failed:`, msg);
+    return { layerType, buffer: null, transparencyApplied: false, error: msg };
+  }
+}
+
+// ============================================================================
+// PER-LAYER ORCHESTRATOR
+// Generates all 7 layers independently (background, building, environment,
+// featured, ornaments, people, composite). Each is its own promise — one
+// layer's failure does not kill the rest of the pack. Pack ends up with
+// status 'ready' (all succeeded), 'partial' (some failed), or 'failed' (all).
+// ============================================================================
+
+export async function createAssetPackPerLayer(ctx: BuildContext): Promise<AssetPackResult> {
+  const packId = await createAssetPackRow({
+    postId:         ctx.postId,
+    projectId:      ctx.projectId,
+    generationPath: 'per-layer',
+  });
+
+  try {
+    // 1. Download all reference buffers once, share across layer calls.
+    const [pinterestBuffers, styleBuffers, renderBuffer] = await Promise.all([
+      Promise.all(ctx.pinterestPaths.map(downloadUploadsBuffer)),
+      Promise.all(ctx.styleRefPaths.map(downloadUploadsBuffer)),
+      ctx.pinnedRenderPath
+        ? downloadUploadsBuffer(ctx.pinnedRenderPath)
+        : Promise.resolve<Buffer | null>(null),
+    ]);
+
+    const styleRefs      = [...pinterestBuffers, ...styleBuffers];
+    const pinterestCount = pinterestBuffers.length;
+    const basePrompt     = buildPackPrompt(ctx);
+
+    const baseUsage = {
+      route:        '/api/posts/[id]/asset-pack',
+      postId:       ctx.postId,
+      projectId:    ctx.projectId,
+      assetPackId:  packId,
+    };
+
+    // 2. Generate all layers in parallel. Each runLayerJob isolates its own failure.
+    const jobs: Promise<LayerJobResult>[] = [
+      runLayerJob('background', async () => {
+        const buf = await generateBackgroundLayer(basePrompt, baseUsage);
+        return { buffer: buf, transparencyApplied: false };
+      }),
+
+      runLayerJob('environment', async () => {
+        const buf = await generateEnvironmentLayer(basePrompt, styleRefs, baseUsage);
+        return removeBackground(buf, { ...baseUsage, layerType: 'environment' });
+      }),
+
+      runLayerJob('featured', async () => {
+        const buf = await generateFeaturedLayer(basePrompt, styleRefs, baseUsage);
+        return removeBackground(buf, { ...baseUsage, layerType: 'featured' });
+      }),
+
+      runLayerJob('ornaments', async () => {
+        const buf = await generateOrnamentsLayer(basePrompt, styleRefs, baseUsage);
+        return removeBackground(buf, { ...baseUsage, layerType: 'ornaments' });
+      }),
+
+      runLayerJob('people', async () => {
+        const buf = await generatePeopleLayer(basePrompt, styleRefs, baseUsage);
+        return removeBackground(buf, { ...baseUsage, layerType: 'people' });
+      }),
+
+      runLayerJob('composite', async () => {
+        const buf = renderBuffer
+          ? await generateFromRender(renderBuffer, basePrompt, styleRefs, pinterestCount, { ...baseUsage, layerType: 'composite' })
+          : await createImageWithGoogle(basePrompt, undefined, { ...baseUsage, layerType: 'composite' });
+        return { buffer: buf, transparencyApplied: false };
+      }),
+    ];
+
+    if (renderBuffer) {
+      jobs.push(
+        runLayerJob('building', async () => getBuildingLayer(renderBuffer, baseUsage)),
+      );
+    }
+
+    const jobResults = await Promise.all(jobs);
+
+    // 3. Upload + persist each successful layer.
+    const layers: LayerResult[] = [];
+    let failedCount = 0;
+
+    for (const r of jobResults) {
+      if (!r.buffer) { failedCount++; continue; }
+
+      const { storagePath, signedUrl } = await uploadLayer(packId, r.layerType, r.buffer);
+      const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
+      const imageId   = await insertLayerImage({
+        packId,
+        projectId:   ctx.projectId,
+        layerType:   r.layerType,
+        storagePath,
+        publicUrl,
+      });
+
+      layers.push({
+        layerType:           r.layerType,
+        imageId,
+        storagePath,
+        signedUrl,
+        transparencyApplied: r.transparencyApplied,
+      });
+    }
+
+    // 4. Build style card and finalize pack.
+    const styleCard = buildStyleCard(
+      ctx.brand,
+      ctx.projectBrand,
+      ctx.pinterestUrls.map((url) => ({ url })),
+    );
+
+    const status: PackStatus =
+      failedCount === 0                  ? 'ready'   :
+      failedCount === jobResults.length  ? 'failed'  :
+                                           'partial';
+
+    await updatePackStatus(packId, status, styleCard);
+    if (status !== 'failed') {
+      await setActiveAssetPack(ctx.postId, packId);
+    }
+
+    return {
+      assetPackId:    packId,
+      postId:         ctx.postId,
+      projectId:      ctx.projectId,
+      status,
+      generationPath: 'per-layer',
+      layers,
+      styleCard,
+    };
+  } catch (err) {
+    await updatePackStatus(packId, 'failed').catch(() => {});
+    throw err;
+  }
 }
