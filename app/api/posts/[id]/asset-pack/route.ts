@@ -19,8 +19,14 @@ import { STORAGE_BUCKETS }   from '@/lib/storage-utils';
 import { MAX_STYLE_REFS }    from '@/lib/google-image';
 import {
   createAssetPackHybrid,
+  getLayerSignedUrl,
   type BuildContext,
+  type LayerType,
+  type LayerResult,
+  type PackStatus,
+  type GenerationPath,
 } from '@/lib/asset-pack-builder';
+import type { StyleCard }    from '@/lib/style-card';
 import type { BrandDNA, ProjectBrandGuidelines } from '@/lib/brand';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1h — only used for the style-card sidebar.
@@ -120,6 +126,93 @@ export async function POST(
     console.error('[asset-pack] POST error:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Asset pack generation failed' },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * GET /api/posts/[id]/asset-pack — fetch the active pack for this post with
+ * signed URLs per layer. Returns { assetPackId: null } (200) when the post
+ * has no active pack yet, so the UI can render a clean empty state without
+ * dealing with a 404.
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+
+    // 1. Resolve the active pack id from the post.
+    const postRes = await query(
+      `SELECT active_asset_pack_id FROM posts WHERE id = $1`,
+      [id],
+    );
+    if (postRes.rows.length === 0) {
+      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
+    const packId = postRes.rows[0].active_asset_pack_id as string | null;
+    if (!packId) {
+      return NextResponse.json({ assetPackId: null });
+    }
+
+    // 2. Load pack + layers in parallel.
+    const [packRes, layersRes] = await Promise.all([
+      query(
+        `SELECT id, post_id, project_id, status, generation_path, style_card, created_at, updated_at
+           FROM asset_packs WHERE id = $1`,
+        [packId],
+      ),
+      query(
+        `SELECT id, layer_type, s3_key, metadata
+           FROM images
+          WHERE asset_pack_id = $1
+            AND layer_type IS NOT NULL`,
+        [packId],
+      ),
+    ]);
+
+    if (packRes.rows.length === 0) {
+      // Pack id is set on the post but the row is gone. Clean state for the UI.
+      return NextResponse.json({ assetPackId: null });
+    }
+    const pack = packRes.rows[0];
+
+    // 3. Sign each layer's URL and read transparency flag from metadata.
+    type LayerRow = {
+      id:         string;
+      layer_type: LayerType;
+      s3_key:     string;
+      metadata:   { transparency_applied?: boolean } | null;
+    };
+    const layers: LayerResult[] = await Promise.all(
+      (layersRes.rows as LayerRow[])
+        .filter((r) => !!r.s3_key)
+        .map(async (r) => ({
+          layerType:           r.layer_type,
+          imageId:             r.id,
+          storagePath:         r.s3_key,
+          signedUrl:           await getLayerSignedUrl(r.s3_key),
+          transparencyApplied: r.metadata?.transparency_applied === true,
+        })),
+    );
+
+    return NextResponse.json({
+      assetPackId:    pack.id as string,
+      postId:         pack.post_id as string,
+      projectId:      pack.project_id as string,
+      status:         pack.status         as PackStatus,
+      generationPath: pack.generation_path as GenerationPath,
+      layers,
+      styleCard:      (pack.style_card ?? null) as StyleCard | null,
+      createdAt:      pack.created_at,
+      updatedAt:      pack.updated_at,
+    });
+  } catch (err) {
+    console.error('[asset-pack] GET error:', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to fetch asset pack' },
       { status: 500 },
     );
   }

@@ -192,12 +192,13 @@ export async function setActiveAssetPack(postId: string, packId: string): Promis
 
 /** INSERT a row into images for one layer of an asset pack. Returns image id. */
 export async function insertLayerImage(args: {
-  packId:      string;
-  projectId:   string;
-  layerType:   LayerType;
-  storagePath: string;
-  publicUrl:   string;     // we store the unsigned URL; routes re-sign on read
-  filename?:   string;
+  packId:              string;
+  projectId:           string;
+  layerType:           LayerType;
+  storagePath:         string;
+  publicUrl:           string;     // we store the unsigned URL; routes re-sign on read
+  transparencyApplied: boolean;    // persisted in metadata so /asset-pack GET reads it back
+  filename?:           string;
 }): Promise<string> {
   const filename = args.filename ?? `${args.layerType}.png`;
   const res = await query(
@@ -213,8 +214,9 @@ export async function insertLayerImage(args: {
       STORAGE_BUCKETS.COMPOSITIONS,
       filename,
       JSON.stringify({
-        provider:     'google',
-        layer_type:   args.layerType,
+        provider:             'google',
+        layer_type:           args.layerType,
+        transparency_applied: args.transparencyApplied,
       }),
       args.packId,
       args.layerType,
@@ -377,10 +379,11 @@ export async function createAssetPackPerLayer(ctx: BuildContext): Promise<AssetP
       const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
       const imageId   = await insertLayerImage({
         packId,
-        projectId:   ctx.projectId,
-        layerType:   r.layerType,
+        projectId:           ctx.projectId,
+        layerType:           r.layerType,
         storagePath,
         publicUrl,
+        transparencyApplied: r.transparencyApplied,
       });
 
       layers.push({
@@ -522,10 +525,11 @@ export async function createAssetPackHybrid(ctx: BuildContext): Promise<AssetPac
       const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
       const imageId   = await insertLayerImage({
         packId,
-        projectId: ctx.projectId,
+        projectId:           ctx.projectId,
         layerType,
         storagePath,
         publicUrl,
+        transparencyApplied,
       });
       layers.push({ layerType, imageId, storagePath, signedUrl, transparencyApplied });
     };
