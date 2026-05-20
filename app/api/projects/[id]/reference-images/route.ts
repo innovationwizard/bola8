@@ -17,7 +17,18 @@ export async function GET(
         ORDER BY display_order ASC, created_at ASC`,
       [id]
     );
-    return NextResponse.json({ referenceImages: result.rows });
+
+    const referenceImages = await Promise.all(
+      result.rows.map(async (row) => {
+        if (!row.storage_path) return row;
+        const { data } = await supabase.storage
+          .from(STORAGE_BUCKETS.UPLOADS)
+          .createSignedUrl(row.storage_path, 3600);
+        return { ...row, url: data?.signedUrl ?? row.url };
+      })
+    );
+
+    return NextResponse.json({ referenceImages });
   } catch (err) {
     console.error('[reference-images] GET error:', err);
     return NextResponse.json({ error: 'Failed to fetch reference images' }, { status: 500 });
@@ -61,7 +72,13 @@ export async function POST(
       [id, storagePath, url, caption ?? null, nextOrder]
     );
 
-    return NextResponse.json({ referenceImage: result.rows[0] }, { status: 201 });
+    const row = result.rows[0];
+    const { data: signedData } = await supabase.storage
+      .from(STORAGE_BUCKETS.UPLOADS)
+      .createSignedUrl(storagePath, 3600);
+    const referenceImage = { ...row, url: signedData?.signedUrl ?? row.url };
+
+    return NextResponse.json({ referenceImage }, { status: 201 });
   } catch (err) {
     console.error('[reference-images] POST error:', err);
     return NextResponse.json({ error: 'Failed to save reference image' }, { status: 500 });
