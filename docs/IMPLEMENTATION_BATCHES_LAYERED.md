@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 20 / 33 batches complete.**
+**Overall progress: 21 / 33 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -83,7 +83,7 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 | 18 | D1.4 | `POST /api/posts/[id]/asset-pack` route handler — loads post + brand + reference paths, builds BuildContext, calls createAssetPackHybrid (which auto-falls-back to per-layer when needed) | ✅ DONE |
 | 19 | D2 | `GET /api/posts/[id]/asset-pack` — fetch active pack with signed URLs per layer (transparencyApplied read from images.metadata; returns `assetPackId: null` 200 when no pack exists yet) | ✅ DONE |
 | 20 | D3 | `POST /api/posts/[id]/asset-pack/layers/[type]` — single-layer regeneration; thin route + regenerateLayer() helper in builder lib; accepts optional refinementPrompt; canonical storage path overwritten, images row swapped | ✅ DONE |
-| 21 | D4 | `GET /api/posts/[id]/asset-pack/zip` — stream ZIP of named layer PNGs + composite + style.json | ⬜ PENDING |
+| 21 | D4 | Per-layer **download URL** support — `getLayerDownloadUrl()` helper (Supabase signed URL with `Content-Disposition: attachment; filename=<layer>.png`); add `downloadUrl` field to `LayerResult`; propagate through orchestrators + regenerateLayer + D2 GET so the UI can wire individual download buttons per layer (no ZIP) | ✅ DONE |
 
 ### Phase E — Operator dashboard
 
@@ -100,9 +100,9 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 | 25 | F1 | New component `AssetPackPanel.tsx` — tab structure (7 tabs + sidebar slot), read-only scaffolding | ⬜ PENDING |
 | 26 | F2 | Wire `AssetPackPanel` into post detail page (below Pinterest Inspo, above ImageVersionNavigator) | ⬜ PENDING |
 | 27 | F3 | Per-tab preview rendering (layer image + status dot) | ⬜ PENDING |
-| 28 | F4 | Per-layer "Regenerar esta capa" button + per-layer notes field | ⬜ PENDING |
+| 28 | F4 | Per-layer "Regenerar esta capa" button + per-layer notes field + per-layer "Descargar PNG" button (uses LayerResult.downloadUrl from D4) | ⬜ PENDING |
 | 29 | F5 | Per-layer "Subir mi propia" upload-replace flow | ⬜ PENDING |
-| 30 | F6 | Pack-level "Generar pack completo" + "Descargar ZIP" actions | ⬜ PENDING |
+| 30 | F6 | Pack-level "Generar pack completo" action (no ZIP — downloads are per-layer, in F4) | ⬜ PENDING |
 | 31 | F7 | Style card sidebar (palette swatches + mood text + Pinterest thumbnails) | ⬜ PENDING |
 
 ### Phase G — Cutover

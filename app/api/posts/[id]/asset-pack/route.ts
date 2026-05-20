@@ -20,6 +20,7 @@ import { MAX_STYLE_REFS }    from '@/lib/google-image';
 import {
   createAssetPackHybrid,
   getLayerSignedUrl,
+  getLayerDownloadUrl,
   type BuildContext,
   type LayerType,
   type LayerResult,
@@ -189,13 +190,20 @@ export async function GET(
     const layers: LayerResult[] = await Promise.all(
       (layersRes.rows as LayerRow[])
         .filter((r) => !!r.s3_key)
-        .map(async (r) => ({
-          layerType:           r.layer_type,
-          imageId:             r.id,
-          storagePath:         r.s3_key,
-          signedUrl:           await getLayerSignedUrl(r.s3_key),
-          transparencyApplied: r.metadata?.transparency_applied === true,
-        })),
+        .map(async (r) => {
+          const [signedUrl, downloadUrl] = await Promise.all([
+            getLayerSignedUrl(r.s3_key),
+            getLayerDownloadUrl(r.s3_key, r.layer_type),
+          ]);
+          return {
+            layerType:           r.layer_type,
+            imageId:             r.id,
+            storagePath:         r.s3_key,
+            signedUrl,
+            downloadUrl,
+            transparencyApplied: r.metadata?.transparency_applied === true,
+          };
+        }),
     );
 
     return NextResponse.json({

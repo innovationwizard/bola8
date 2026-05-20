@@ -75,7 +75,8 @@ export interface LayerResult {
   layerType:           LayerType;
   imageId:             string;     // images.id
   storagePath:         string;     // path inside compositions bucket
-  signedUrl:           string;     // valid for SIGNED_URL_TTL_SECONDS
+  signedUrl:           string;     // for inline <img> preview; valid SIGNED_URL_TTL_SECONDS
+  downloadUrl:         string;     // forces Content-Disposition: attachment with semantic filename
   transparencyApplied: boolean;    // false when Bria was skipped or failed
 }
 
@@ -121,25 +122,51 @@ export function buildLayerStoragePath(packId: string, layerType: LayerType): str
   return `asset-packs/${packId}/${layerType}.png`;
 }
 
-/** Upload a layer PNG to the compositions bucket and return its path + signed URL. */
+/**
+ * Upload a layer PNG to the compositions bucket and return its path + both
+ * signed URL flavors: inline (for `<img>` rendering) and attachment (for the
+ * per-tab "Descargar PNG" button).
+ */
 export async function uploadLayer(
   packId:    string,
   layerType: LayerType,
   buffer:    Buffer,
-): Promise<{ storagePath: string; signedUrl: string }> {
+): Promise<{ storagePath: string; signedUrl: string; downloadUrl: string }> {
   const storagePath = buildLayerStoragePath(packId, layerType);
   await uploadBuffer(STORAGE_BUCKETS.COMPOSITIONS, storagePath, buffer, 'image/png');
-  const signedUrl = await getLayerSignedUrl(storagePath);
-  return { storagePath, signedUrl };
+  const [signedUrl, downloadUrl] = await Promise.all([
+    getLayerSignedUrl(storagePath),
+    getLayerDownloadUrl(storagePath, layerType),
+  ]);
+  return { storagePath, signedUrl, downloadUrl };
 }
 
-/** Create a 7-day signed URL for a layer in the compositions bucket. */
+/** Create a 7-day signed URL for inline rendering of a layer in the compositions bucket. */
 export async function getLayerSignedUrl(storagePath: string): Promise<string> {
   const { data, error } = await supabase.storage
     .from(STORAGE_BUCKETS.COMPOSITIONS)
     .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
   if (error || !data?.signedUrl) {
     throw new Error(`Failed to sign layer URL (${storagePath}): ${error?.message ?? 'unknown'}`);
+  }
+  return data.signedUrl;
+}
+
+/**
+ * Create a 7-day signed URL that forces the browser to download the file as
+ * <layerType>.png (Content-Disposition: attachment). UI wires this URL into
+ * the per-tab "Descargar PNG" button.
+ */
+export async function getLayerDownloadUrl(
+  storagePath: string,
+  layerType:   LayerType,
+): Promise<string> {
+  const filename = `${layerType}.png`;
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKETS.COMPOSITIONS)
+    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS, { download: filename });
+  if (error || !data?.signedUrl) {
+    throw new Error(`Failed to sign layer download URL (${storagePath}): ${error?.message ?? 'unknown'}`);
   }
   return data.signedUrl;
 }
@@ -375,7 +402,7 @@ export async function createAssetPackPerLayer(ctx: BuildContext): Promise<AssetP
     for (const r of jobResults) {
       if (!r.buffer) { failedCount++; continue; }
 
-      const { storagePath, signedUrl } = await uploadLayer(packId, r.layerType, r.buffer);
+      const { storagePath, signedUrl, downloadUrl } = await uploadLayer(packId, r.layerType, r.buffer);
       const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
       const imageId   = await insertLayerImage({
         packId,
@@ -391,6 +418,7 @@ export async function createAssetPackPerLayer(ctx: BuildContext): Promise<AssetP
         imageId,
         storagePath,
         signedUrl,
+        downloadUrl,
         transparencyApplied: r.transparencyApplied,
       });
     }
@@ -529,15 +557,8 @@ export async function regenerateLayer(
   }
 
   // 3. Upload to canonical path (overwrites previous file at the same key).
-  await uploadBuffer(
-    STORAGE_BUCKETS.COMPOSITIONS,
-    buildLayerStoragePath(packId, layerType),
-    buffer,
-    'image/png',
-  );
-  const storagePath = buildLayerStoragePath(packId, layerType);
-  const publicUrl   = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
-  const signedUrl   = await getLayerSignedUrl(storagePath);
+  const { storagePath, signedUrl, downloadUrl } = await uploadLayer(packId, layerType, buffer);
+  const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
 
   // 4. Swap the images row: delete previous, insert fresh.
   await query(
@@ -556,7 +577,7 @@ export async function regenerateLayer(
   // 5. Bump the pack's updated_at so the UI knows something changed.
   await query(`UPDATE asset_packs SET updated_at = NOW() WHERE id = $1`, [packId]);
 
-  return { layerType, imageId, storagePath, signedUrl, transparencyApplied };
+  return { layerType, imageId, storagePath, signedUrl, downloadUrl, transparencyApplied };
 }
 
 // ============================================================================
@@ -653,7 +674,7 @@ export async function createAssetPackHybrid(ctx: BuildContext): Promise<AssetPac
       buffer:              Buffer,
       transparencyApplied: boolean,
     ) => {
-      const { storagePath, signedUrl } = await uploadLayer(packId, layerType, buffer);
+      const { storagePath, signedUrl, downloadUrl } = await uploadLayer(packId, layerType, buffer);
       const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
       const imageId   = await insertLayerImage({
         packId,
@@ -663,7 +684,7 @@ export async function createAssetPackHybrid(ctx: BuildContext): Promise<AssetPac
         publicUrl,
         transparencyApplied,
       });
-      layers.push({ layerType, imageId, storagePath, signedUrl, transparencyApplied });
+      layers.push({ layerType, imageId, storagePath, signedUrl, downloadUrl, transparencyApplied });
     };
 
     await persist('building', buildingResult.buffer, buildingResult.transparencyApplied);

@@ -28,7 +28,7 @@ After weighing the three paths in the research doc:
 **Hybrid logic:**
 1. User clicks "Generar pack" → run the current render-anchored composition once, then decompose with Qwen-Image-Layered. Cheap, fast, gives the user something to look at in ~30 seconds.
 2. User opens a specific tab and clicks "Regenerar solo esta capa" → run per-tab generation with a layer-focused prompt + Bria RMBG cutout. Costs more but only the layer the user wants surgical control over.
-3. User downloads ZIP. Or — phase 2 polish — downloads a single PSD with all layers named.
+3. User downloads each layer individually via a per-tab "Descargar PNG" button (no ZIP — user prefers to grab only the layers she actively wants). PSD export remains deferred.
 
 This pattern matches Adobe Firefly's Generative Fill design (full image first, surgical edits on demand) and is the most coherent path for a small team to ship without rebuilding everything.
 
@@ -53,7 +53,7 @@ This pattern matches Adobe Firefly's Generative Fill design (full image first, s
 │              │ [Descargar PNG]              │                 │
 │              └─────────────────────────────┘                 │
 │                                                              │
-│ Pack actions: [Generar pack completo] [Descargar ZIP]        │
+│ Pack actions: [Generar pack completo]                        │
 └──────────────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -247,9 +247,13 @@ Regenerate a single layer with optional refined input.
 
 Fetch current active pack with all layers and their URLs (signed).
 
-### `GET /api/posts/[id]/asset-pack/zip`
+### Per-layer downloads (no ZIP route)
 
-Stream a ZIP file containing all transparent PNGs + composite.jpg + style.json. Named files for designer ergonomics.
+Each layer in the AssetPackResult carries a `downloadUrl` field — a Supabase
+signed URL with `Content-Disposition: attachment; filename=<layer>.png` set
+so the browser saves the file with a semantic name. The UI wires this URL
+into a "Descargar PNG" button on each layer's tab. No bulk ZIP endpoint;
+the designer downloads only the layers she actively wants.
 
 ---
 
@@ -296,14 +300,14 @@ Pinterest Inspo gallery (existing, unchanged)
 │  │                    │  └──────────────────────────┘ │
 │  └────────────────────┘                               │
 │                                                       │
-│  [Regenerar esta capa]  [Subir mi propia]  [↓ PNG]    │
+│  [Regenerar esta capa]  [Subir mi propia]  [Descargar PNG]   │
 │                                                       │
 └───────────────────────────────────────────────────────┘
 
 [Style card sidebar — palette + mood + Pinterest thumbnails]
 
 ─────────────────────────────────────────────────────────
-[Generar pack completo]  [Descargar ZIP]
+[Generar pack completo]
 ```
 
 **Interaction principles:**
@@ -312,7 +316,7 @@ Pinterest Inspo gallery (existing, unchanged)
 - Status dots tell the user at a glance which layers are ready / generating / absent.
 - Per-tab notes field lets the user say "person should be jogging, not standing" before regenerating that layer.
 - "Subir mi propia" lets the user replace any generated layer with her own PNG upload — important escape hatch.
-- "Descargar ZIP" is the primary terminal action. The user is going to Photoshop.
+- Each tab has its own "Descargar PNG" button — the designer downloads only the layers she actually wants, one at a time, then composes in Photoshop.
 - **No cost information of any kind in user UI** — no per-action prices, no "spent so far," no rate-limit warnings. Costs are operator-only (see `/admin/usage`).
 
 **No emojis. No auto-stop on rating. Spanish copy.** Follows existing UX standards in memory.
@@ -395,7 +399,7 @@ Nothing about the prior refactor is wasted; it becomes the inner core of the new
 | 1 | Default generation path | **Hybrid** — Gemini composition → Qwen decomposition by default; per-layer regen on demand |
 | 2 | Default visible tabs | **All 7 image tabs visible** — Background, Building, Environment, Featured, Ornaments, People; Style as sidebar card. Maximum discoverability. |
 | 3 | Background removal | **Bria RMBG 2.0 via fal.ai** — hosted, production-grade, ~$0.003/cutout |
-| 4 | PSD export | **Skip for MVP** — ship ZIP of named PNGs. Revisit only if layered output is adopted. |
+| 4 | PSD export | **Skip for MVP.** Original recommendation was "ship ZIP of named PNGs first," but a later directive (2026-05-20) supersedes that: no ZIP either — the designer downloads each layer individually via a per-tab "Descargar PNG" button. PSD remains deferred. |
 | 5 | Migration strategy | **Forward-only** — old posts keep their composite. New posts use packs. No backfill, no convert button. |
 | 6 | Cost visibility | **No user-facing cost UI of any kind.** No caps, no warnings, no rate-limit copy. Build an operator-only superuser dashboard with complete API call logs, cost, latency, model, and per-post/per-user aggregation. See [[feedback-hide-costs-from-users]]. |
 
@@ -421,7 +425,7 @@ This adds three new batches to the implementation list (see updated batch table 
 
 This pivot succeeds when:
 
-1. The user opens Photoshop, drags the ZIP contents in, and her layer panel matches her mental model — no renaming or reorganizing needed.
+1. The user opens Photoshop, downloads the specific layers she wants via the per-tab "Descargar PNG" buttons, and her layer panel matches her mental model — no renaming or reorganizing needed.
 2. She does not feel the urge to open Gemini for missing pieces.
 3. Per-layer regeneration feels "free" — fast enough and cheap enough that she explores variations.
 4. The style card eliminates the second-monitor Pinterest tab habit.
