@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 19 / 33 batches complete.**
+**Overall progress: 20 / 33 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -82,7 +82,7 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 | 17 | D1.3 | `lib/asset-pack-builder.ts` — `createAssetPackHybrid()`: Gemini composition → Qwen decompose → upload; falls back to per-layer when Qwen returns null or no pinned render; building always sourced from pinned render (Bria) for highest fidelity | ✅ DONE |
 | 18 | D1.4 | `POST /api/posts/[id]/asset-pack` route handler — loads post + brand + reference paths, builds BuildContext, calls createAssetPackHybrid (which auto-falls-back to per-layer when needed) | ✅ DONE |
 | 19 | D2 | `GET /api/posts/[id]/asset-pack` — fetch active pack with signed URLs per layer (transparencyApplied read from images.metadata; returns `assetPackId: null` 200 when no pack exists yet) | ✅ DONE |
-| 20 | D3 | `POST /api/posts/[id]/asset-pack/layers/[type]` — single-layer regeneration | ⬜ PENDING |
+| 20 | D3 | `POST /api/posts/[id]/asset-pack/layers/[type]` — single-layer regeneration; thin route + regenerateLayer() helper in builder lib; accepts optional refinementPrompt; canonical storage path overwritten, images row swapped | ✅ DONE |
 | 21 | D4 | `GET /api/posts/[id]/asset-pack/zip` — stream ZIP of named layer PNGs + composite + style.json | ⬜ PENDING |
 
 ### Phase E — Operator dashboard

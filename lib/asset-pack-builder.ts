@@ -428,6 +428,138 @@ export async function createAssetPackPerLayer(ctx: BuildContext): Promise<AssetP
 }
 
 // ============================================================================
+// PER-LAYER REGENERATION
+// Regenerates ONE layer of an existing pack in place. Used by D3
+// (POST /api/posts/[id]/asset-pack/layers/[type]) when the designer clicks
+// "Regenerar esta capa" on a single tab.
+//
+// Storage path is reused (canonical asset-packs/{packId}/{layerType}.png) so
+// the file URL stays stable. The previous images row for this layer-in-pack
+// is deleted and a fresh one is inserted — no per-layer version history
+// (pack-level history exists via parent_pack_id when the user generates a
+// brand new pack).
+//
+// Caller is responsible for loading the same BuildContext that built the
+// original pack; this function does not re-fetch from the DB.
+// ============================================================================
+
+export async function regenerateLayer(
+  packId:            string,
+  ctx:               BuildContext,
+  layerType:         LayerType,
+  refinementPrompt?: string,
+): Promise<LayerResult> {
+  // 1. Download references in parallel (same set used by the orchestrators).
+  const [pinterestBuffers, styleBuffers, renderBuffer] = await Promise.all([
+    Promise.all(ctx.pinterestPaths.map(downloadUploadsBuffer)),
+    Promise.all(ctx.styleRefPaths.map(downloadUploadsBuffer)),
+    ctx.pinnedRenderPath
+      ? downloadUploadsBuffer(ctx.pinnedRenderPath)
+      : Promise.resolve<Buffer | null>(null),
+  ]);
+
+  const styleRefs      = [...pinterestBuffers, ...styleBuffers];
+  const pinterestCount = pinterestBuffers.length;
+
+  const basePrompt = buildPackPrompt(ctx);
+  const prompt     = refinementPrompt?.trim()
+    ? `${basePrompt} Additional direction for this regeneration: ${refinementPrompt.trim()}`
+    : basePrompt;
+
+  const baseUsage = {
+    route:        '/api/posts/[id]/asset-pack/layers/[type]',
+    postId:       ctx.postId,
+    projectId:    ctx.projectId,
+    assetPackId:  packId,
+    layerType,
+  };
+
+  // 2. Generate the single layer based on its type.
+  let buffer:              Buffer;
+  let transparencyApplied: boolean;
+
+  switch (layerType) {
+    case 'background': {
+      buffer = await generateBackgroundLayer(prompt, baseUsage);
+      transparencyApplied = false;
+      break;
+    }
+    case 'building': {
+      if (!renderBuffer) throw new Error('No pinned render — cannot regenerate building layer');
+      const r = await getBuildingLayer(renderBuffer, baseUsage);
+      buffer = r.buffer;
+      transparencyApplied = r.transparencyApplied;
+      break;
+    }
+    case 'environment': {
+      const gen = await generateEnvironmentLayer(prompt, styleRefs, baseUsage);
+      const r   = await removeBackground(gen, baseUsage);
+      buffer = r.buffer;
+      transparencyApplied = r.transparencyApplied;
+      break;
+    }
+    case 'featured': {
+      const gen = await generateFeaturedLayer(prompt, styleRefs, baseUsage);
+      const r   = await removeBackground(gen, baseUsage);
+      buffer = r.buffer;
+      transparencyApplied = r.transparencyApplied;
+      break;
+    }
+    case 'ornaments': {
+      const gen = await generateOrnamentsLayer(prompt, styleRefs, baseUsage);
+      const r   = await removeBackground(gen, baseUsage);
+      buffer = r.buffer;
+      transparencyApplied = r.transparencyApplied;
+      break;
+    }
+    case 'people': {
+      const gen = await generatePeopleLayer(prompt, styleRefs, baseUsage);
+      const r   = await removeBackground(gen, baseUsage);
+      buffer = r.buffer;
+      transparencyApplied = r.transparencyApplied;
+      break;
+    }
+    case 'composite': {
+      buffer = renderBuffer
+        ? await generateFromRender(renderBuffer, prompt, styleRefs, pinterestCount, baseUsage)
+        : await createImageWithGoogle(prompt, undefined, baseUsage);
+      transparencyApplied = false;
+      break;
+    }
+  }
+
+  // 3. Upload to canonical path (overwrites previous file at the same key).
+  await uploadBuffer(
+    STORAGE_BUCKETS.COMPOSITIONS,
+    buildLayerStoragePath(packId, layerType),
+    buffer,
+    'image/png',
+  );
+  const storagePath = buildLayerStoragePath(packId, layerType);
+  const publicUrl   = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
+  const signedUrl   = await getLayerSignedUrl(storagePath);
+
+  // 4. Swap the images row: delete previous, insert fresh.
+  await query(
+    `DELETE FROM images WHERE asset_pack_id = $1 AND layer_type = $2`,
+    [packId, layerType],
+  );
+  const imageId = await insertLayerImage({
+    packId,
+    projectId: ctx.projectId,
+    layerType,
+    storagePath,
+    publicUrl,
+    transparencyApplied,
+  });
+
+  // 5. Bump the pack's updated_at so the UI knows something changed.
+  await query(`UPDATE asset_packs SET updated_at = NOW() WHERE id = $1`, [packId]);
+
+  return { layerType, imageId, storagePath, signedUrl, transparencyApplied };
+}
+
+// ============================================================================
 // HYBRID ORCHESTRATOR
 // Cost-optimized path: one Gemini render-anchored composition → Qwen-Image-
 // Layered decomposition → up to 5 semantic layers + dedicated building layer
