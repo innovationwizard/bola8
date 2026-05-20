@@ -15,8 +15,8 @@
  *   F7: real Style card sidebar (palette + mood + Pinterest thumbs).
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { Layers, Loader2, RefreshCw, Download } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Layers, Loader2, RefreshCw, Download, Upload } from 'lucide-react';
 
 export type LayerTabType =
   | 'background'
@@ -84,9 +84,11 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
   const [pack, setPack]             = useState<ApiPack | null>(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
-  const [notes, setNotes]           = useState<Partial<Record<LayerTabType, string>>>({});
+  const [notes, setNotes]               = useState<Partial<Record<LayerTabType, string>>>({});
   const [regenerating, setRegenerating] = useState<LayerTabType | null>(null);
-  const [regenErrors, setRegenErrors] = useState<Partial<Record<LayerTabType, string>>>({});
+  const [regenErrors, setRegenErrors]   = useState<Partial<Record<LayerTabType, string>>>({});
+  const [uploading, setUploading]       = useState<LayerTabType | null>(null);
+  const [uploadErrors, setUploadErrors] = useState<Partial<Record<LayerTabType, string>>>({});
 
   const fetchPack = useCallback(async () => {
     setLoading(true);
@@ -104,6 +106,52 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
   }, [postId]);
 
   useEffect(() => { fetchPack(); }, [fetchPack]);
+
+  const handleUpload = useCallback(async (layerType: LayerTabType, file: File) => {
+    setUploading(layerType);
+    setUploadErrors((prev) => ({ ...prev, [layerType]: undefined }));
+    try {
+      // 1 — request a signed upload URL targeting the canonical layer path.
+      const urlRes = await fetch(`/api/posts/${postId}/asset-pack/layers/${layerType}/upload-url`, {
+        method: 'POST',
+      });
+      if (!urlRes.ok) {
+        const body = await urlRes.json().catch(() => ({}));
+        throw new Error(body.error || `No se pudo obtener la URL de carga (HTTP ${urlRes.status})`);
+      }
+      const { signedUrl } = await urlRes.json();
+
+      // 2 — PUT the file directly to Supabase Storage.
+      const putRes = await fetch(signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'image/png' },
+        body:    file,
+      });
+      if (!putRes.ok) throw new Error(`Error al subir el archivo (HTTP ${putRes.status})`);
+
+      // 3 — notify the server so it can swap the images row.
+      const regRes = await fetch(`/api/posts/${postId}/asset-pack/layers/${layerType}`, {
+        method: 'PUT',
+      });
+      if (!regRes.ok) {
+        const body = await regRes.json().catch(() => ({}));
+        throw new Error(body.error || `Error al registrar la subida (HTTP ${regRes.status})`);
+      }
+      const updatedLayer = await regRes.json() as ApiLayer;
+      setPack((prev) => {
+        if (!prev) return prev;
+        const others = (prev.layers ?? []).filter((l) => l.layerType !== updatedLayer.layerType);
+        return { ...prev, layers: [...others, updatedLayer] };
+      });
+    } catch (e) {
+      setUploadErrors((prev) => ({
+        ...prev,
+        [layerType]: e instanceof Error ? e.message : 'Error desconocido',
+      }));
+    } finally {
+      setUploading(null);
+    }
+  }, [postId]);
 
   const handleRegenerate = useCallback(async (layerType: LayerTabType) => {
     setRegenerating(layerType);
@@ -240,6 +288,9 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
                 regenerating={regenerating === activeTab}
                 regenError={regenErrors[activeTab]}
                 onRegenerate={() => handleRegenerate(activeTab)}
+                uploading={uploading === activeTab}
+                uploadError={uploadErrors[activeTab]}
+                onUpload={(file) => handleUpload(activeTab, file)}
               />
             )}
           </div>
@@ -373,7 +424,7 @@ function LayerBody({
 }
 
 function LayerActions({
-  layerType: _layerType,
+  layerType,
   label,
   layer,
   notes,
@@ -381,6 +432,9 @@ function LayerActions({
   regenerating,
   regenError,
   onRegenerate,
+  uploading,
+  uploadError,
+  onUpload,
 }: {
   layerType:     LayerTabType;
   label:         string;
@@ -390,7 +444,13 @@ function LayerActions({
   regenerating:  boolean;
   regenError:    string | undefined;
   onRegenerate:  () => void;
+  uploading:     boolean;
+  uploadError:   string | undefined;
+  onUpload:      (file: File) => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const busy = regenerating || uploading;
+
   return (
     <div className="space-y-3 border-t border-neutral-100 pt-5">
       <div>
@@ -400,7 +460,7 @@ function LayerActions({
         <textarea
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
-          disabled={regenerating}
+          disabled={busy}
           placeholder={`Indicaciones específicas para regenerar ${label.toLowerCase()} — ej. "persona corriendo en ropa deportiva, a media zancada"`}
           rows={2}
           className="w-full text-sm text-neutral-700 placeholder-neutral-300 border border-neutral-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-neutral-400 transition-colors disabled:opacity-50"
@@ -410,7 +470,7 @@ function LayerActions({
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={onRegenerate}
-          disabled={regenerating}
+          disabled={busy}
           className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white text-xs rounded-lg hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {regenerating
@@ -419,10 +479,32 @@ function LayerActions({
           {regenerating ? 'Regenerando…' : (layer ? 'Regenerar esta capa' : 'Generar esta capa')}
         </button>
 
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+          className="inline-flex items-center gap-2 px-4 py-2 text-xs border border-neutral-200 rounded-lg text-neutral-700 hover:border-neutral-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {uploading
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <Upload className="w-3.5 h-3.5" />}
+          {uploading ? 'Subiendo…' : 'Subir mi propia'}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onUpload(f);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+          }}
+        />
+
         {layer?.downloadUrl && (
           <a
             href={layer.downloadUrl}
-            download={`${_layerType}.png`}
+            download={`${layerType}.png`}
             className="inline-flex items-center gap-2 px-4 py-2 text-xs border border-neutral-200 rounded-lg text-neutral-700 hover:border-neutral-400 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
@@ -431,9 +513,8 @@ function LayerActions({
         )}
       </div>
 
-      {regenError && (
-        <p className="text-xs text-red-500">{regenError}</p>
-      )}
+      {regenError  && <p className="text-xs text-red-500">{regenError}</p>}
+      {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
     </div>
   );
 }

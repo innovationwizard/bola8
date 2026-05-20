@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 28 / 33 batches complete.**
+**Overall progress: 29 / 33 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -101,7 +101,7 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 | 26 | F2 | Wire `AssetPackPanel` into post detail page (below Pinterest Inspo, above the legacy ImageVersionNavigator) | ✅ DONE |
 | 27 | F3 | Per-tab preview rendering: fetches `/api/posts/[id]/asset-pack` on mount; composite thumbnail from layer.signedUrl; per-tab active layer image; checkerboard background for transparent layers; per-tab + pack-level status badges; loading + no-pack + generating + missing-layer states | ✅ DONE |
 | 28 | F4 | Per-layer actions: notes textarea + Regenerar button (POSTs `/asset-pack/layers/[type]` with refinementPrompt body, swaps the returned layer into local state) + Descargar PNG anchor (uses LayerResult.downloadUrl). Per-tab regen + error state. | ✅ DONE |
-| 29 | F5 | Per-layer "Subir mi propia" upload-replace flow | ⬜ PENDING |
+| 29 | F5 | Per-layer "Subir mi propia" upload-replace flow: new `upload-url` route mints signed Supabase upload URL targeting canonical path; new PUT method on layers/[type] verifies the file exists then swaps the images row; UI hidden file input + Subir button + upload state | ✅ DONE |
 | 30 | F6 | Pack-level "Generar pack completo" action (no ZIP — downloads are per-layer, in F4) | ⬜ PENDING |
 | 31 | F7 | Style card sidebar (palette swatches + mood text + Pinterest thumbnails) | ⬜ PENDING |
 

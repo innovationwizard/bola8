@@ -16,12 +16,17 @@
 import { NextResponse }    from 'next/server';
 import { query }           from '@/lib/db';
 import { supabase }        from '@/lib/supabase';
-import { STORAGE_BUCKETS } from '@/lib/storage-utils';
+import { STORAGE_BUCKETS, getPublicUrl } from '@/lib/storage-utils';
 import { MAX_STYLE_REFS }  from '@/lib/google-image';
 import {
   regenerateLayer,
+  buildLayerStoragePath,
+  getLayerSignedUrl,
+  getLayerDownloadUrl,
+  insertLayerImage,
   type BuildContext,
   type LayerType,
+  type LayerResult,
 } from '@/lib/asset-pack-builder';
 import type { BrandDNA, ProjectBrandGuidelines } from '@/lib/brand';
 
@@ -161,6 +166,107 @@ export async function POST(
     console.error('[asset-pack/layer] POST error:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Layer regeneration failed' },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * PUT /api/posts/[id]/asset-pack/layers/[type] — register a user-uploaded layer.
+ *
+ * The client has already PUT the file directly to the canonical Supabase
+ * storage path via the signed URL minted by upload-url/route.ts. This handler
+ * does the metadata swap only:
+ *   - Validates layer type, looks up the active pack, verifies the file
+ *     actually landed in storage.
+ *   - Deletes the previous images row for this (pack, layer) and inserts a
+ *     fresh one (transparency_applied defaults to true — user-uploaded PNGs
+ *     are presumed intentional about alpha).
+ *   - Bumps asset_packs.updated_at.
+ *   - Returns the same LayerResult shape that POST returns.
+ */
+export async function PUT(
+  _request: Request,
+  { params }: { params: Promise<{ id: string; type: string }> },
+) {
+  try {
+    const { id: postId, type } = await params;
+
+    if (!VALID_LAYER_TYPES.has(type as LayerType)) {
+      return NextResponse.json({ error: `Invalid layer type "${type}"` }, { status: 400 });
+    }
+    const layerType = type as LayerType;
+
+    const postLookup = await query(
+      `SELECT active_asset_pack_id, p.project_id
+         FROM posts p
+        WHERE p.id = $1`,
+      [postId],
+    );
+    if (postLookup.rows.length === 0) {
+      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
+    const packId    = postLookup.rows[0].active_asset_pack_id as string | null;
+    const projectId = postLookup.rows[0].project_id            as string;
+    if (!packId) {
+      return NextResponse.json(
+        { error: 'No active asset pack — generate the pack first.' },
+        { status: 409 },
+      );
+    }
+
+    const storagePath = buildLayerStoragePath(packId, layerType);
+
+    // Verify the file actually exists in storage before we touch the DB.
+    const folder = storagePath.split('/').slice(0, -1).join('/');
+    const filename = storagePath.split('/').pop()!;
+    const { data: listed, error: listError } = await supabase.storage
+      .from(STORAGE_BUCKETS.COMPOSITIONS)
+      .list(folder, { search: filename });
+    if (listError) throw new Error(`Storage check failed: ${listError.message}`);
+    const exists = (listed ?? []).some((f) => f.name === filename);
+    if (!exists) {
+      return NextResponse.json(
+        { error: 'No se encontró el archivo subido. Vuelve a intentar la subida.' },
+        { status: 409 },
+      );
+    }
+
+    // Swap the images row.
+    await query(
+      `DELETE FROM images WHERE asset_pack_id = $1 AND layer_type = $2`,
+      [packId, layerType],
+    );
+    const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
+    const imageId   = await insertLayerImage({
+      packId,
+      projectId,
+      layerType,
+      storagePath,
+      publicUrl,
+      transparencyApplied: true,  // user-uploaded PNGs presumed intentional about alpha
+    });
+
+    await query(`UPDATE asset_packs SET updated_at = NOW() WHERE id = $1`, [packId]);
+
+    const [signedUrl, downloadUrl] = await Promise.all([
+      getLayerSignedUrl(storagePath),
+      getLayerDownloadUrl(storagePath, layerType),
+    ]);
+
+    const result: LayerResult = {
+      layerType,
+      imageId,
+      storagePath,
+      signedUrl,
+      downloadUrl,
+      transparencyApplied: true,
+    };
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error('[asset-pack/layer] PUT error:', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Layer registration failed' },
       { status: 500 },
     );
   }
