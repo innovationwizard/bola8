@@ -1,14 +1,19 @@
 /**
- * Google Cloud image generation — two distinct flows:
+ * Google Cloud image generation — three distinct flows:
  *
- *   Creation    → imagen-4-ultra               $0.06/image
- *                 Pixel-dense photorealism; no latent reasoning needed.
- *                 SDK method: ai.models.generateImages()
+ *   Creation        → imagen-4-ultra               $0.06/image
+ *                     Pixel-dense photorealism; no latent reasoning needed.
+ *                     SDK method: ai.models.generateImages()
  *
- *   Composition → gemini-3-pro-image-preview   $0.035/image
- *                 Gemini 3 "Nano Banana" multimodal reasoning; subject
- *                 retention, material swaps, lighting, element placement.
- *                 SDK method: ai.models.generateContent() + responseModalities IMAGE
+ *   Composition     → gemini-3-pro-image-preview   $0.035/image
+ *                     Gemini 3 multimodal reasoning; subject retention,
+ *                     material swaps, lighting, element placement.
+ *                     SDK method: ai.models.generateContent() + responseModalities IMAGE
+ *
+ *   Render-anchored → gemini-3-pro-image-preview   $0.035/image
+ *                     Takes an actual project render as structural base.
+ *                     Pinterest Inspo images lead the style direction.
+ *                     Solves "incorrect building" failure mode.
  */
 
 import sharp from 'sharp';
@@ -176,6 +181,85 @@ export async function applyStyleReferences(
     const textPart = parts?.find((p) => p.text);
     throw new Error(
       `${COMPOSITION_MODEL} returned no image during style adaptation. Model text: ${textPart?.text ?? '(none)'}`
+    );
+  }
+
+  return resizeToOutput(Buffer.from(imagePart.inlineData.data, 'base64'));
+}
+
+// ============================================================================
+// RENDER-ANCHORED GENERATION  —  gemini-3-pro-image-preview
+// Use an actual project render as the structural base so the correct building
+// is always present. Pinterest Inspo images lead the style direction;
+// project-level style refs provide supporting visual context.
+//
+// styleRefBuffers order: Pinterest Inspo first (highest weight), then project
+// style refs. The composition prompt names them explicitly so the model knows
+// which have priority.
+// ============================================================================
+
+export async function generateFromRender(
+  renderBuffer: Buffer,
+  prompt: string,
+  styleRefBuffers: Buffer[], // Pinterest Inspo first, then project style refs
+  pinterestCount: number,    // how many of the styleRefBuffers are Pinterest Inspo
+): Promise<Buffer> {
+  const ai = getClient();
+
+  const pinterestRefs  = styleRefBuffers.slice(0, pinterestCount);
+  const projectRefs    = styleRefBuffers.slice(pinterestCount, pinterestCount + MAX_STYLE_REFS);
+
+  const systemText =
+    'You are a professional marketing image composer for a real estate development. ' +
+    'You will be given: (1) an actual architectural render of the property, ' +
+    '(2) Pinterest inspiration images that define the visual style for this specific post, ' +
+    'and (3) optional project-wide brand style references. ' +
+    'Your task: create a photorealistic marketing image that uses the property render as the ' +
+    'structural foundation — the architecture and setting must be recognizable and accurate — ' +
+    'while applying the mood, palette, lighting, and atmosphere from the inspiration images. ' +
+    'The result must look like a professional real estate marketing photograph, not a composite. ' +
+    'Do not change the building architecture. Do not add invented structures. ' +
+    'Output a single image at 1080×1350px (portrait 4:5).';
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parts: any[] = [
+    { text: systemText },
+    { text: 'PROPERTY RENDER — structural anchor (preserve architecture):' },
+    { inlineData: { mimeType: 'image/jpeg', data: renderBuffer.toString('base64') } },
+    { text: prompt },
+  ];
+
+  if (pinterestRefs.length > 0) {
+    parts.push({
+      text: `PINTEREST INSPIRATION (${pinterestRefs.length} image${pinterestRefs.length > 1 ? 's' : ''}) — highest priority style direction for this specific post. Match the mood, palette, lighting, and atmosphere:`,
+    });
+    for (const buf of pinterestRefs) {
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
+    }
+  }
+
+  if (projectRefs.length > 0) {
+    parts.push({
+      text: 'PROJECT BRAND STYLE REFERENCES — supporting visual context (secondary priority):',
+    });
+    for (const buf of projectRefs.slice(0, MAX_STYLE_REFS)) {
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
+    }
+  }
+
+  const response = await ai.models.generateContent({
+    model: COMPOSITION_MODEL,
+    contents: createUserContent(parts),
+    config: { responseModalities: ['IMAGE', 'TEXT'] },
+  });
+
+  const responseParts = response.candidates?.[0]?.content?.parts;
+  const imagePart = responseParts?.find((p) => p.inlineData?.mimeType?.startsWith('image/'));
+
+  if (!imagePart?.inlineData?.data) {
+    const textPart = responseParts?.find((p) => p.text);
+    throw new Error(
+      `${COMPOSITION_MODEL} returned no image in render-anchored generation. Model text: ${textPart?.text ?? '(none)'}`
     );
   }
 

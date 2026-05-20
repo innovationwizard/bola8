@@ -19,7 +19,7 @@ If context is lost, READ THIS FILE FIRST to know exactly where to resume.
 | 1 | DB migration SQL | ✅ DONE |
 | 2 | API — post_reference_images CRUD routes | ✅ DONE |
 | 3 | API — pin/unpin render route | ✅ DONE |
-| 4 | Lib — `generateFromRender()` function | ⬜ PENDING |
+| 4 | Lib — `generateFromRender()` function | ✅ DONE |
 | 5 | API — update `generate` route (render-anchored path) | ⬜ PENDING |
 | 6 | API — update `regenerate` route (consistent Layer 3) | ⬜ PENDING |
 | 7 | UI — `PostReferenceImages` component (no page wiring) | ⬜ PENDING |
