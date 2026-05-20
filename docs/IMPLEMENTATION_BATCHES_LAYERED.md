@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 14 / 30 batches complete.**
+**Overall progress: 14 / 33 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -73,45 +73,50 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ### Phase D — Asset pack API surface
 
+D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built and reviewed in stages. The 4 sub-batches collectively deliver what the original D1 specified: hybrid pipeline + per-layer fallback + route handler.
+
 | Overall # | Phase ID | Batch | Status |
 |-----------|----------|-------|--------|
-| 15 | D1 | `POST /api/posts/[id]/asset-pack` — orchestrate hybrid pipeline (composition + decompose OR per-layer fallback) | ⬜ PENDING |
-| 16 | D2 | `GET /api/posts/[id]/asset-pack` — fetch active pack with signed URLs per layer | ⬜ PENDING |
-| 17 | D3 | `POST /api/posts/[id]/asset-pack/layers/[type]` — single-layer regeneration | ⬜ PENDING |
-| 18 | D4 | `GET /api/posts/[id]/asset-pack/zip` — stream ZIP of named layer PNGs + composite + style.json | ⬜ PENDING |
+| 15 | D1.1 | `lib/asset-pack-builder.ts` — types (LayerType, BuildContext, PackResult) + Supabase storage helpers (upload layer PNG, build named storage path) + DB helpers (insert pack row, insert layer image row, update pack status) | ⬜ PENDING |
+| 16 | D1.2 | `lib/asset-pack-builder.ts` — `createAssetPackPerLayer()`: fetch inputs, generate all 6 layers in parallel, apply Bria to C2–C5 outputs, upload + persist | ⬜ PENDING |
+| 17 | D1.3 | `lib/asset-pack-builder.ts` — `createAssetPackHybrid()`: Gemini composition → Qwen decompose → upload; falls back to per-layer when Qwen returns null | ⬜ PENDING |
+| 18 | D1.4 | `POST /api/posts/[id]/asset-pack` route handler — thin wrapper that picks `createAssetPackHybrid` (default) vs `createAssetPackPerLayer` based on FAL availability + request body | ⬜ PENDING |
+| 19 | D2 | `GET /api/posts/[id]/asset-pack` — fetch active pack with signed URLs per layer | ⬜ PENDING |
+| 20 | D3 | `POST /api/posts/[id]/asset-pack/layers/[type]` — single-layer regeneration | ⬜ PENDING |
+| 21 | D4 | `GET /api/posts/[id]/asset-pack/zip` — stream ZIP of named layer PNGs + composite + style.json | ⬜ PENDING |
 
 ### Phase E — Operator dashboard
 
 | Overall # | Phase ID | Batch | Status |
 |-----------|----------|-------|--------|
-| 19 | E1 | `GET /api/admin/usage` — aggregations (totals, per-project, per-model, daily/weekly/monthly) | ⬜ PENDING |
-| 20 | E2 | `GET /api/admin/usage/calls` — paginated recent calls list with full detail | ⬜ PENDING |
-| 21 | E3 | UI page `/admin/usage` — totals + breakdowns + recent calls table + FAL availability indicator | ⬜ PENDING |
+| 22 | E1 | `GET /api/admin/usage` — aggregations (totals, per-project, per-model, daily/weekly/monthly) | ⬜ PENDING |
+| 23 | E2 | `GET /api/admin/usage/calls` — paginated recent calls list with full detail | ⬜ PENDING |
+| 24 | E3 | UI page `/admin/usage` — totals + breakdowns + recent calls table + FAL availability indicator | ⬜ PENDING |
 
 ### Phase F — User UI: Layered Studio
 
 | Overall # | Phase ID | Batch | Status |
 |-----------|----------|-------|--------|
-| 22 | F1 | New component `AssetPackPanel.tsx` — tab structure (7 tabs + sidebar slot), read-only scaffolding | ⬜ PENDING |
-| 23 | F2 | Wire `AssetPackPanel` into post detail page (below Pinterest Inspo, above ImageVersionNavigator) | ⬜ PENDING |
-| 24 | F3 | Per-tab preview rendering (layer image + status dot) | ⬜ PENDING |
-| 25 | F4 | Per-layer "Regenerar esta capa" button + per-layer notes field | ⬜ PENDING |
-| 26 | F5 | Per-layer "Subir mi propia" upload-replace flow | ⬜ PENDING |
-| 27 | F6 | Pack-level "Generar pack completo" + "Descargar ZIP" actions | ⬜ PENDING |
-| 28 | F7 | Style card sidebar (palette swatches + mood text + Pinterest thumbnails) | ⬜ PENDING |
+| 25 | F1 | New component `AssetPackPanel.tsx` — tab structure (7 tabs + sidebar slot), read-only scaffolding | ⬜ PENDING |
+| 26 | F2 | Wire `AssetPackPanel` into post detail page (below Pinterest Inspo, above ImageVersionNavigator) | ⬜ PENDING |
+| 27 | F3 | Per-tab preview rendering (layer image + status dot) | ⬜ PENDING |
+| 28 | F4 | Per-layer "Regenerar esta capa" button + per-layer notes field | ⬜ PENDING |
+| 29 | F5 | Per-layer "Subir mi propia" upload-replace flow | ⬜ PENDING |
+| 30 | F6 | Pack-level "Generar pack completo" + "Descargar ZIP" actions | ⬜ PENDING |
+| 31 | F7 | Style card sidebar (palette swatches + mood text + Pinterest thumbnails) | ⬜ PENDING |
 
 ### Phase G — Cutover
 
 | Overall # | Phase ID | Batch | Status |
 |-----------|----------|-------|--------|
-| 29 | G1 | New posts default to layered output (single-image generate still reachable as legacy) | ⬜ PENDING |
-| 30 | G2 | Documentation pass: changelog entry + update master workflow memory | ⬜ PENDING |
+| 32 | G1 | New posts default to layered output (single-image generate still reachable as legacy) | ⬜ PENDING |
+| 33 | G2 | Documentation pass: changelog entry + update master workflow memory | ⬜ PENDING |
 
 ---
 
 ## Resume Instructions (if context is lost)
 
-1. Read this file. Update the "Overall progress: X / 30" line. Find the first `⬜ PENDING` batch by Overall #.
+1. Read this file. Update the "Overall progress: X / 33" line. Find the first `⬜ PENDING` batch by Overall #.
 2. Read [PLAN_LAYERED_WORKFLOW.md](PLAN_LAYERED_WORKFLOW.md) for the architectural context.
 3. Read [AUDIT_LAYERED_WORKFLOW_GAPS.md](AUDIT_LAYERED_WORKFLOW_GAPS.md) for the gap analysis behind that batch.
 4. Read the memory files for project context — especially:
