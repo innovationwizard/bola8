@@ -298,8 +298,8 @@ export default function ImageVersionNavigator({ imageId, projectId, className = 
         )}
       </div>
 
-      {/* Feedback panel — skipped for the original upload */}
-      {!currentVersion.isOriginal && (
+      {/* Feedback panel — shown on all AI-generated images (provider = 'google') */}
+      {currentVersion.enhancement_metadata?.provider === 'google' && (
         <div className="px-6 py-6 border-t border-gray-100 space-y-5">
 
           {/* 1 — Rating */}

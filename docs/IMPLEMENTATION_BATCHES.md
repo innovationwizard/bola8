@@ -25,7 +25,7 @@ If context is lost, READ THIS FILE FIRST to know exactly where to resume.
 | 7 | UI — `PostReferenceImages` component (no page wiring) | ✅ DONE |
 | 8 | UI — Wire Pinterest Inspo gallery to post page | ✅ DONE |
 | 9 | UI — Split project brand page: Renders + Style sections | ✅ DONE |
-| 10 | Polish — `formato` in prompts + `isOriginal` fix | ⬜ PENDING |
+| 10 | Polish — `formato` in prompts + `isOriginal` fix | ✅ DONE |
 
 ---
 
