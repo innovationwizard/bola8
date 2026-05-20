@@ -35,6 +35,7 @@ import {
   generatePeopleLayer,
 } from '@/lib/google-image';
 import { getBuildingLayer, removeBackground } from '@/lib/bria';
+import { decomposeIntoLayers }                from '@/lib/qwen-layered';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -414,6 +415,148 @@ export async function createAssetPackPerLayer(ctx: BuildContext): Promise<AssetP
       projectId:      ctx.projectId,
       status,
       generationPath: 'per-layer',
+      layers,
+      styleCard,
+    };
+  } catch (err) {
+    await updatePackStatus(packId, 'failed').catch(() => {});
+    throw err;
+  }
+}
+
+// ============================================================================
+// HYBRID ORCHESTRATOR
+// Cost-optimized path: one Gemini render-anchored composition → Qwen-Image-
+// Layered decomposition → up to 5 semantic layers + dedicated building layer
+// from the pinned render + the composition itself as preview.
+//
+// Two automatic fallbacks:
+//   - No pinned render → hybrid has no structural anchor → call per-layer.
+//   - Qwen decomposition unavailable / failed → mark this hybrid attempt
+//     'failed' (debug trail) and call per-layer.
+//
+// Layer mapping is heuristic: Qwen returns RGBA layers in roughly back-to-
+// front order. We assume index 0 = background, 1 = environment, etc. The
+// mapping is imperfect — the designer can regenerate any layer via the
+// per-layer route (D3) if Qwen's split disagrees with the semantic intent.
+// Building is always sourced from the pinned render (highest fidelity),
+// never from Qwen's "building"-ish layer.
+// ============================================================================
+
+/** Qwen output index → our semantic layer type. Order assumes back-to-front. */
+const QWEN_INDEX_TO_LAYER: readonly LayerType[] = [
+  'background',   // 0 — back-most plate
+  'environment',  // 1 — vegetation, ground
+  'people',       // 2 — figures (if present)
+  'ornaments',    // 3 — small accents
+  'featured',     // 4 — highlighted element
+] as const;
+
+export async function createAssetPackHybrid(ctx: BuildContext): Promise<AssetPackResult> {
+  // Without a pinned render, hybrid has no anchor — go directly to per-layer.
+  if (!ctx.pinnedRenderPath) {
+    return createAssetPackPerLayer(ctx);
+  }
+
+  const packId = await createAssetPackRow({
+    postId:         ctx.postId,
+    projectId:      ctx.projectId,
+    generationPath: 'hybrid',
+  });
+
+  try {
+    // 1. Download references in parallel.
+    const [pinterestBuffers, styleBuffers, renderBuffer] = await Promise.all([
+      Promise.all(ctx.pinterestPaths.map(downloadUploadsBuffer)),
+      Promise.all(ctx.styleRefPaths.map(downloadUploadsBuffer)),
+      downloadUploadsBuffer(ctx.pinnedRenderPath),
+    ]);
+
+    const styleRefs      = [...pinterestBuffers, ...styleBuffers];
+    const pinterestCount = pinterestBuffers.length;
+    const basePrompt     = buildPackPrompt(ctx);
+
+    const baseUsage = {
+      route:        '/api/posts/[id]/asset-pack',
+      postId:       ctx.postId,
+      projectId:    ctx.projectId,
+      assetPackId:  packId,
+    };
+
+    // 2. Generate the composite via the render-anchored pipeline.
+    const compositeBuffer = await generateFromRender(
+      renderBuffer,
+      basePrompt,
+      styleRefs,
+      pinterestCount,
+      { ...baseUsage, layerType: 'composite' },
+    );
+
+    // 3. Decompose composite via Qwen. Returns null when FAL is unavailable
+    //    or the call fails — both cases fall through to per-layer.
+    const decomposed = await decomposeIntoLayers(
+      compositeBuffer,
+      QWEN_INDEX_TO_LAYER.length,
+      { ...baseUsage, layerType: 'composite' },
+    );
+
+    if (!decomposed) {
+      // Hybrid path didn't land. Mark this attempt failed, let per-layer take over.
+      // (per-layer creates its own pack row and points the post at it.)
+      await updatePackStatus(packId, 'failed');
+      return createAssetPackPerLayer(ctx);
+    }
+
+    // 4. Building always comes from the pinned render through Bria — highest fidelity.
+    const buildingResult = await getBuildingLayer(renderBuffer, baseUsage);
+
+    // 5. Upload + persist every layer.
+    const layers: LayerResult[] = [];
+
+    const persist = async (
+      layerType:           LayerType,
+      buffer:              Buffer,
+      transparencyApplied: boolean,
+    ) => {
+      const { storagePath, signedUrl } = await uploadLayer(packId, layerType, buffer);
+      const publicUrl = getPublicUrl(STORAGE_BUCKETS.COMPOSITIONS, storagePath);
+      const imageId   = await insertLayerImage({
+        packId,
+        projectId: ctx.projectId,
+        layerType,
+        storagePath,
+        publicUrl,
+      });
+      layers.push({ layerType, imageId, storagePath, signedUrl, transparencyApplied });
+    };
+
+    await persist('building', buildingResult.buffer, buildingResult.transparencyApplied);
+
+    for (let i = 0; i < decomposed.length && i < QWEN_INDEX_TO_LAYER.length; i++) {
+      const layerType = QWEN_INDEX_TO_LAYER[i];
+      await persist(layerType, decomposed[i].buffer, true /* qwen output is RGBA */);
+    }
+
+    await persist('composite', compositeBuffer, false);
+
+    // 6. Build style card and finalize.
+    const styleCard = buildStyleCard(
+      ctx.brand,
+      ctx.projectBrand,
+      ctx.pinterestUrls.map((url) => ({ url })),
+    );
+
+    // Hybrid is "ready" as long as we have the composite + building + at least one
+    // decomposed layer. Anything less and we'd have called per-layer already.
+    await updatePackStatus(packId, 'ready', styleCard);
+    await setActiveAssetPack(ctx.postId, packId);
+
+    return {
+      assetPackId:    packId,
+      postId:         ctx.postId,
+      projectId:      ctx.projectId,
+      status:         'ready',
+      generationPath: 'hybrid',
       layers,
       styleCard,
     };
