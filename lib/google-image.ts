@@ -492,3 +492,52 @@ export async function generateOrnamentsLayer(
     { ...ctx, layerType: 'ornaments' },
   );
 }
+
+const PEOPLE_FRAMING =
+  'You are generating ONLY the PEOPLE layer of a real-estate marketing image — ' +
+  'ONE person actively performing the specific action described in the user ' +
+  'prompt (e.g. running, walking, reading on a bench). Photorealistic, full ' +
+  'body, dynamic action pose that clearly communicates what they are doing — ' +
+  'mid-motion, not standing still. Generic everyday appearance with casual ' +
+  'styling and no identifying facial features (face turned, blurred, or in ' +
+  'soft focus — avoid recognizable likenesses). ' +
+  'CRITICAL: render the person isolated on a clean NEUTRAL WHITE BACKGROUND ' +
+  'so they can be cut out and composited in Photoshop. Do not render any ' +
+  'background scene, any building, any other people, any text. Include only ' +
+  'objects the person is actively holding or wearing as part of the action. ' +
+  'Match a portrait 4:5 framing — full body visible from head to feet.';
+
+/**
+ * People layer — ONE person performing a specific action, isolated for cutout.
+ * Optional layer; the asset-pack route decides whether to generate based on
+ * post content (e.g. running track post → person running).
+ *
+ * Common failure modes this prompt guards against:
+ *   - "person standing" (default pose) — solved by mid-motion requirement.
+ *   - multiple people / crowd — solved by ONE person directive.
+ *   - identifiable faces (legal concern) — solved by generic / soft-focus face.
+ *   - background contamination — solved by neutral-white-background directive.
+ *
+ * Two-step pipeline (Imagen + applyStyleReferences) so the person's lighting
+ * and palette match the rest of the pack. Bria handles the cutout downstream —
+ * people are its primary use case, edge quality is excellent.
+ */
+export async function generatePeopleLayer(
+  prompt:          string,
+  styleRefBuffers: Buffer[]    = [],
+  ctx:             CallContext = {},
+): Promise<Buffer> {
+  const baseBuffer = await createImageWithGoogle(
+    `${PEOPLE_FRAMING} ${prompt}`,
+    undefined,
+    { ...ctx, layerType: 'people' },
+  );
+
+  if (styleRefBuffers.length === 0) return baseBuffer;
+
+  return applyStyleReferences(
+    baseBuffer,
+    styleRefBuffers,
+    { ...ctx, layerType: 'people' },
+  );
+}
