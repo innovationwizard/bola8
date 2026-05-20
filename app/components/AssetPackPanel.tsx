@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Layers, Loader2, RefreshCw, Download, Upload } from 'lucide-react';
+import type { StyleCard } from '@/lib/style-card';
 
 /** Roughly observed pack-generation time on the hybrid path. Drives the
  * countdown — UI caps the fill bar at 95% so it never claims "done" prematurely. */
@@ -49,6 +50,7 @@ interface ApiPack {
   status?:        PackStatus;
   generationPath?: GenerationPath;
   layers?:        ApiLayer[];
+  styleCard?:     StyleCard | null;
 }
 
 interface LayerTabSpec {
@@ -351,13 +353,8 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
           </div>
         </div>
 
-        {/* Style sidebar — F7 fills this in */}
-        <aside className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-3">
-          <p className="text-xs uppercase tracking-[0.15em] text-neutral-400">Estilo</p>
-          <p className="text-xs text-neutral-400">
-            Paleta, mood, y referencias de Pinterest aparecerán aquí (F7).
-          </p>
-        </aside>
+        {/* Style sidebar */}
+        <StyleCardSidebar card={pack?.styleCard ?? null} loading={loading} />
       </div>
     </div>
   );
@@ -571,6 +568,90 @@ function LayerActions({
       {regenError  && <p className="text-xs text-red-500">{regenError}</p>}
       {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
     </div>
+  );
+}
+
+function StyleCardSidebar({ card, loading }: { card: StyleCard | null; loading: boolean }) {
+  return (
+    <aside className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-5 self-start sticky top-4">
+      <p className="text-xs uppercase tracking-[0.15em] text-neutral-400">Estilo</p>
+
+      {loading && !card && (
+        <p className="text-xs text-neutral-400">Cargando…</p>
+      )}
+
+      {!loading && !card && (
+        <p className="text-xs text-neutral-400">
+          La tarjeta de estilo aparecerá cuando se genere el pack.
+        </p>
+      )}
+
+      {card && (
+        <>
+          {/* Palette */}
+          {card.palette.length > 0 && (
+            <section>
+              <p className="text-[10px] uppercase tracking-[0.15em] text-neutral-400 mb-2">Paleta</p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {card.palette.map((s, i) => (
+                  <div
+                    key={`${s.hex}-${i}`}
+                    className="aspect-square rounded border border-neutral-200"
+                    style={{ backgroundColor: s.hex }}
+                    title={`${s.hex}${s.name ? ` — ${s.name}` : ''} (${s.role})`}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Mood */}
+          {card.mood.length > 0 && (
+            <section>
+              <p className="text-[10px] uppercase tracking-[0.15em] text-neutral-400 mb-2">Mood</p>
+              <ul className="space-y-1">
+                {card.mood.map((m, i) => (
+                  <li key={i} className="text-xs text-neutral-700 leading-snug">{m}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Voice */}
+          {card.voice && (
+            <section>
+              <p className="text-[10px] uppercase tracking-[0.15em] text-neutral-400 mb-2">Voz</p>
+              <p className="text-xs text-neutral-600 italic leading-snug">{card.voice}</p>
+            </section>
+          )}
+
+          {/* Pinterest thumbnails */}
+          {card.pinterestThumbnails.length > 0 && (
+            <section>
+              <p className="text-[10px] uppercase tracking-[0.15em] text-neutral-400 mb-2">Pinterest Inspo</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {card.pinterestThumbnails.map((url, i) => (
+                  <div key={i} className="aspect-square rounded overflow-hidden border border-neutral-200 bg-neutral-100">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* All-empty fallback (shouldn't normally happen but stays graceful) */}
+          {card.palette.length === 0
+            && card.mood.length === 0
+            && !card.voice
+            && card.pinterestThumbnails.length === 0 && (
+            <p className="text-xs text-neutral-400">
+              Sin datos de marca todavía. Configura la marca del proyecto y agrega Pinterest Inspo.
+            </p>
+          )}
+        </>
+      )}
+    </aside>
   );
 }
 

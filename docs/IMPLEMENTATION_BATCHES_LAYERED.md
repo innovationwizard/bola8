@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 31 / 34 batches complete.**
+**Overall progress: 32 / 34 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -104,7 +104,7 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 | 29 | F5 | Per-layer "Subir mi propia" upload-replace flow: new `upload-url` route mints signed Supabase upload URL targeting canonical path; new PUT method on layers/[type] verifies the file exists then swaps the images row; UI hidden file input + Subir button + upload state | ✅ DONE |
 | 30 | F6 | Pack-level "Generar pack completo" action — POSTs `/api/posts/[id]/asset-pack`, updates local pack state on success; button switches label to "Regenerar pack completo" once a pack exists; shows loader during generation; inline error surface | ✅ DONE |
 | 31 | F6.1 | Generation progress indicator — slim banner with elapsed/estimated fill bar + "~Ns restantes" countdown during pack generation. Caps at 95% pre-completion; switches to "Casi listo…" past the estimate. Backed by [[feedback-show-progress-for-long-ops]]. | ✅ DONE |
-| 32 | F7 | Style card sidebar (palette swatches + mood text + Pinterest thumbnails) | ⬜ PENDING |
+| 32 | F7 | Style card sidebar — palette swatches (5-col grid with role/name tooltips) + mood phrase list + voice italic blurb + Pinterest Inspo thumbnails grid. Sticky to viewport; graceful empty states per section. | ✅ DONE |
 
 ### Phase G — Cutover
 
