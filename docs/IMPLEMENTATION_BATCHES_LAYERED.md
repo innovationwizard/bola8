@@ -47,7 +47,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 | A1 | DB migration: `asset_packs`, `images` columns, `posts.active_asset_pack_id`, `api_usage_logs` | ✅ DONE |
 | A2 | `lib/api-usage.ts` — logging primitive + pricing constants table | ✅ DONE |
 | A3 | Wire `api-usage` into existing Google API functions (instrumentation only, no behavior change) | ✅ DONE |
-| A4 | `lib/style-card.ts` — pure synthesis function (no API calls) | ⬜ PENDING |
+| A4 | `lib/style-card.ts` — pure synthesis function (no API calls) | ✅ DONE |
 | A5 | `lib/superuser.ts` — Supabase auth check + SUPERUSER_EMAILS allowlist | ⬜ PENDING |
 
 ### Phase B — FAL integration with graceful fallback
