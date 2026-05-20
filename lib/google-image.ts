@@ -363,3 +363,47 @@ export async function generateBackgroundLayer(
     { ...ctx, layerType: 'background' },
   );
 }
+
+const ENVIRONMENT_FRAMING =
+  'You are generating ONLY the ENVIRONMENT layer of a real-estate marketing ' +
+  'image — foreground and midground vegetation, paths, ground textures, hedges, ' +
+  'water features, low landscaping appropriate to the project setting. ' +
+  'Photorealistic, 1080×1350 portrait. ' +
+  'CRITICAL: do not render any building, any architecture, any people, any ' +
+  'vehicles, any sky, any text. Generate the environment isolated on a clean ' +
+  'NEUTRAL WHITE BACKGROUND so it can be cut out and composited in Photoshop. ' +
+  'Anchor the ground plane to feel natural at portrait 4:5 framing — vegetation ' +
+  'typically occupies the lower two-thirds of the frame, with negative space ' +
+  'above where the building will be placed.';
+
+/**
+ * Environment layer — vegetation, paths, ground textures, isolated on neutral
+ * background. Two-step pipeline:
+ *
+ *   1. Imagen 4 Ultra generates the base environment scene from the framed prompt.
+ *   2. (If style refs exist) Gemini adapts palette/lighting/mood to match the
+ *      caller-provided refs so the environment reads as part of the same
+ *      coherent post — most importantly matching Pinterest Inspo.
+ *
+ * Output is opaque PNG/JPEG. The asset-pack pipeline runs the result through
+ * Bria to cut out the white background and get a transparent layer.
+ */
+export async function generateEnvironmentLayer(
+  prompt:          string,
+  styleRefBuffers: Buffer[]    = [],
+  ctx:             CallContext = {},
+): Promise<Buffer> {
+  const baseBuffer = await createImageWithGoogle(
+    `${ENVIRONMENT_FRAMING} ${prompt}`,
+    undefined,
+    { ...ctx, layerType: 'environment' },
+  );
+
+  if (styleRefBuffers.length === 0) return baseBuffer;
+
+  return applyStyleReferences(
+    baseBuffer,
+    styleRefBuffers,
+    { ...ctx, layerType: 'environment' },
+  );
+}
