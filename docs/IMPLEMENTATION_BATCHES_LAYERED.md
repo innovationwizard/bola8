@@ -54,7 +54,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 | # | Batch | Status |
 |---|-------|--------|
-| B1 | `lib/fal.ts` — FAL_AVAILABLE constant + client init helper + fal API wrapper | ⬜ PENDING |
+| B1 | `lib/fal.ts` — FAL_AVAILABLE constant + client init helper + fal API wrapper | ✅ DONE |
 | B2 | `lib/bria.ts` — `removeBackground()` with graceful fallback (returns input unchanged if !FAL_AVAILABLE) | ⬜ PENDING |
 | B3 | `lib/qwen-layered.ts` — `decomposeIntoLayers()` with graceful fallback (returns null if !FAL_AVAILABLE) | ⬜ PENDING |
 
