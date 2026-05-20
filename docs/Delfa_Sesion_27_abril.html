@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delfa — Sesión 27 de abril</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --eucalyptus: #98AA9D;
+    --mist: #B3C9D6;
+    --plaster: #F2EFE2;
+    --soot: #2D3536;
+    --moss: #697C70;
+
+    --bg: var(--plaster);
+    --text: var(--soot);
+    --accent: var(--moss);
+    --highlight: var(--eucalyptus);
+    --soft: var(--mist);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 60px 32px 80px;
+  }
+
+  /* ── Header ── */
+  .header {
+    margin-bottom: 56px;
+    padding-bottom: 40px;
+    border-bottom: 1px solid var(--eucalyptus);
+    position: relative;
+  }
+
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    right: -32px;
+    width: 180px;
+    height: 180px;
+    background: radial-gradient(circle, rgba(179,201,214,0.3) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .header-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--moss);
+    margin-bottom: 12px;
+  }
+
+  .header h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 42px;
+    font-weight: 500;
+    color: var(--soot);
+    line-height: 1.15;
+    margin-bottom: 8px;
+  }
+
+  .header .date {
+    font-size: 14px;
+    color: var(--moss);
+  }
+
+  /* ── Intro ── */
+  .intro {
+    background: white;
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 48px;
+    border-left: 3px solid var(--eucalyptus);
+    box-shadow: 0 1px 3px rgba(45,53,54,0.04);
+  }
+
+  .intro p {
+    color: var(--soot);
+    font-size: 15px;
+  }
+
+  /* ── Section titles ── */
+  .section-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--moss);
+    margin-bottom: 32px;
+  }
+
+  /* ── Step cards ── */
+  .step {
+    margin-bottom: 36px;
+    position: relative;
+  }
+
+  .step-number {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 48px;
+    font-weight: 400;
+    color: var(--eucalyptus);
+    line-height: 1;
+    margin-bottom: 4px;
+    opacity: 0.7;
+  }
+
+  .step h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--soot);
+    margin-bottom: 12px;
+  }
+
+  .step p {
+    margin-bottom: 10px;
+  }
+
+  .step .detail {
+    background: white;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-top: 14px;
+    box-shadow: 0 1px 3px rgba(45,53,54,0.04);
+  }
+
+  /* ── Credentials box ── */
+  .credentials {
+    background: var(--soot);
+    color: var(--plaster);
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-top: 14px;
+    font-size: 14px;
+  }
+
+  .credentials .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(242,239,226,0.1);
+  }
+
+  .credentials .row:last-child {
+    border-bottom: none;
+  }
+
+  .credentials .label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--eucalyptus);
+  }
+
+  .credentials .value {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    color: var(--plaster);
+    word-break: break-all;
+  }
+
+  .credentials .warning {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--mist);
+    font-style: italic;
+  }
+
+  /* ── Options (A / B) ── */
+  .options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .option {
+    background: white;
+    border-radius: 10px;
+    padding: 20px 22px;
+    box-shadow: 0 1px 3px rgba(45,53,54,0.04);
+  }
+
+  .option-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: white;
+    background: var(--moss);
+    padding: 3px 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+
+  .option h4 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+
+  .option p {
+    font-size: 14px;
+    color: var(--moss);
+    line-height: 1.6;
+  }
+
+  /* ── Callout ── */
+  .callout {
+    background: linear-gradient(135deg, rgba(179,201,214,0.25), rgba(152,170,157,0.15));
+    border-radius: 10px;
+    padding: 18px 24px;
+    margin-top: 16px;
+    font-size: 14px;
+    color: var(--soot);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .callout::before {
+    content: '→';
+    position: absolute;
+    left: 24px;
+    top: 18px;
+    color: var(--moss);
+    font-weight: 600;
+  }
+
+  .callout p {
+    padding-left: 20px;
+    margin: 0;
+  }
+
+  /* ── Inline code ── */
+  code {
+    font-family: 'DM Sans', sans-serif;
+    background: rgba(152,170,157,0.2);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--soot);
+  }
+
+  /* ── Divider ── */
+  .divider {
+    height: 1px;
+    background: var(--eucalyptus);
+    opacity: 0.4;
+    margin: 48px 0;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    font-size: 14px;
+    color: var(--moss);
+    font-style: italic;
+    margin-top: 56px;
+    padding-top: 32px;
+    border-top: 1px solid var(--eucalyptus);
+  }
+
+  /* ── Link ── */
+  a {
+    color: var(--moss);
+    text-decoration: underline;
+    text-decoration-color: var(--eucalyptus);
+    text-underline-offset: 3px;
+    transition: color 0.2s;
+  }
+
+  a:hover {
+    color: var(--soot);
+  }
+
+  strong {
+    font-weight: 600;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 560px) {
+    .page { padding: 40px 20px 60px; }
+    .header h1 { font-size: 32px; }
+    .options { grid-template-columns: 1fr; }
+    .step-number { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-label">Guía de onboarding</div>
+    <h1>Hola, Delfa</h1>
+    <div class="date">Sesión del 27 de abril, 2026</div>
+  </div>
+
+  <!-- Intro -->
+  <div class="intro">
+    <p>Hoy se creó tu acceso a la plataforma y se habilitó la carga de material fotográfico dentro de cada campaña. La sección de imágenes ahora tiene una zona de carga donde podés arrastrar todas las fotos de un proyecto en batch, todas juntas, y la galería se va armando sola conforme suben los archivos con un indicador de progreso en tiempo real.</p>
+  </div>
+
+  <!-- Steps -->
+  <div class="section-label">Paso a paso</div>
+
+  <!-- Step 1 -->
+  <div class="step">
+    <div class="step-number">01</div>
+    <h3>Entrar a la plataforma</h3>
+    <p>Abrí <a href="https://bola8-playground.vercel.app" target="_blank">bola8-playground.vercel.app</a> en tu navegador.</p>
+    <div class="credentials">
+      <div class="row">
+        <span class="label">Correo</span>
+        <span class="value">delfa.priego@puertaabierta.com.gt</span>
+      </div>
+      <div class="row">
+        <span class="label">Contraseña</span>
+        <span class="value">Bola8Temp2026!</span>
+      </div>
+      <div class="warning">Cambiá la contraseña en cuanto puedas.</div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step">
+    <div class="step-number">02</div>
+    <h3>Ir a una campaña</h3>
+    <p>Desde la pantalla de inicio, hacé clic en <strong>Campaigns</strong>. Vas a ver las campañas que ya existen. Entrá a la que querés trabajar.</p>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step">
+    <div class="step-number">03</div>
+    <h3>Abrir la galería de fotos</h3>
+    <p>Dentro de la campaña, buscá la sección <strong>Image Assets</strong> y hacé clic. Si la campaña todavía no tiene fotos, vas a ver la zona de carga <strong>grande</strong> en el centro.</p>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step">
+    <div class="step-number">04</div>
+    <h3>Subir tus fotos</h3>
+    <p>Tenés dos formas:</p>
+
+    <div class="options">
+      <div class="option">
+        <span class="option-tag">Opción A</span>
+        <h4>Arrastrando</h4>
+        <p>Seleccioná todas las fotos desde tu carpeta (<code>Cmd+A</code>) y arrástralas sobre la zona punteada. Soltás, y listo.</p>
+      </div>
+      <div class="option">
+        <span class="option-tag">Opción B</span>
+        <h4>Seleccionando</h4>
+        <p>Hacé clic sobre la zona o en el botón <strong>Subir fotos</strong>, seleccionás las que querés y confirmás.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p>No hay límite de cantidad por sesión. Si tenés 40 fotos de un proyecto, subí las 40 de una sola vez.</p>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="step">
+    <div class="step-number">05</div>
+    <h3>Esperar la carga</h3>
+    <p>Mientras suben, vas a ver un indicador de progreso tipo <em>"Subiendo 3 de 12..."</em> con el nombre del archivo actual. No cerrés la pestaña mientras eso está corriendo.</p>
+    <div class="detail">
+      <p>Cuando termina, aparece la confirmación y la galería se actualiza sola con todas las fotos ya en grid.</p>
+    </div>
+  </div>
+
+  <!-- Step 6 -->
+  <div class="step">
+    <div class="step-number">06</div>
+    <h3>Revisarlas</h3>
+    <p>Cada foto aparece como una tarjeta en la galería mostrando el original tal como lo subiste.</p>
+    <div class="callout">
+      <p>La siguiente etapa — que viene pronto — es donde la IA entra a trabajar sobre cada imagen para generar composiciones que vas a poder comparar lado a lado.</p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    Cualquier duda, llamame o escribime, 24/7.
+  </div>
+
+</div>
+
+</body>
+</html>

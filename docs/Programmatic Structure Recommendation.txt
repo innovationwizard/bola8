@@ -1,0 +1,173 @@
+Programmatic Structure Recommendation
+
+Based on the furniture quotation process inferred from the provided spreadsheet data (item groupings, specs, costs, materials, visuals), here's a direct, actionable Python-based structure using object-oriented design. This models a quotation as an evolving entity, supporting iterations and revisions without assumptions beyond visible data patterns. Use this in your AI tool for automation, integrate with pandas for spreadsheet handling, SQLAlchemy for persistence, or Streamlit/Flask for UI to monetize as a SaaS feature.
+
+Core Assumptions (Factual, No Extrapolation)
+
+Data includes: Item categories (e.g., rooms, options), dimensions, materials, costs (unit, total, IVA, profit), visuals.
+Process: Start blank → Design iterations (internal) → Client revisions (external feedback) → Final lock.
+Track versions for auditability and AI forecasting (e.g., predict cost changes).
+
+High-Level Workflow
+
+Init Project: Create blank Quotation object.
+Design Iterations: Add/edit items internally; version each change.
+Revisions: Client feedback triggers new versions; compare diffs.
+Finalize: Lock version, compute finals, export (e.g., PDF/Excel).
+
+Data Models (Classes)
+Use dataclasses for simplicity; extend with Pydantic for validation in production.
+Pythonfrom dataclasses import dataclass, field
+from typing import List, Dict, Optional
+import uuid
+import datetime
+import pandas as pd  # For data handling/export
+
+@dataclass
+class ItemSpec:
+    name: str  # e.g., "SILLAS OPCION 1"
+    category: str  # e.g., "Comedor"
+    dimensions: Dict[str, float] = field(default_factory=dict)  # e.g., {"largo": 1.8, "alto": 0.9}
+    materials: List[str] = field(default_factory=list)  # e.g., ["Melamina chocolate", "Tela a elegir"]
+    notes: str = ""  # e.g., "Cliente NO quiere back como tal"
+    image_url: Optional[str] = None  # Link to visual
+
+@dataclass
+class ItemCost:
+    quantity: float = 1.0
+    unit_price: float = 0.0
+    total: float = 0.0  # Computed: quantity * unit_price
+    iva_rate: float = 0.19  # Default IVA (19% from data inference); configurable
+    price_with_iva: float = 0.0  # Computed: total * (1 + iva_rate)
+    profit: float = 0.0  # Computed: price_with_iva - total
+
+    def compute(self):
+        self.total = self.quantity * self.unit_price
+        self.price_with_iva = self.total * (1 + self.iva_rate)
+        # Profit logic: From data, often ~30-50%; implement as margin % or fixed
+        self.profit = self.price_with_iva - self.total  # Placeholder; customize
+
+@dataclass
+class QuotationItem:
+    spec: ItemSpec
+    cost: ItemCost
+    def update_cost(self):
+        self.cost.compute()
+
+@dataclass
+class QuotationVersion:
+    version_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: datetime.datetime = field(default_factory=datetime.datetime.now)
+    items: List[QuotationItem] = field(default_factory=list)
+    changes: str = ""  # Description of diffs, e.g., "Added 2 chairs, updated materials"
+    is_final: bool = False
+
+    def add_item(self, item: QuotationItem):
+        self.items.append(item)
+        item.update_cost()
+
+    def compute_totals(self) -> Dict[str, float]:
+        return {
+            "total_cost": sum(i.cost.total for i in self.items),
+            "total_with_iva": sum(i.cost.price_with_iva for i in self.items),
+            "total_profit": sum(i.cost.profit for i in self.items)
+        }
+
+@dataclass
+class Quotation:
+    project_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    client_id: str = ""  # Link to CRM
+    versions: List[QuotationVersion] = field(default_factory=list)
+    current_version: Optional[QuotationVersion] = None
+
+    def start_new(self):
+        """Init blank project."""
+        new_version = QuotationVersion(changes="Initial blank design")
+        self.versions.append(new_version)
+        self.current_version = new_version
+
+    def iterate_design(self, changes: str, new_items: List[QuotationItem] = None, edits: Dict[str, Dict] = None):
+        """Internal iteration: Clone current, apply changes."""
+        if not self.current_version:
+            raise ValueError("No current version")
+        new_version = QuotationVersion(changes=changes)
+        new_version.items = [QuotationItem(i.spec, i.cost) for i in self.current_version.items]  # Deep copy
+        if new_items:
+            for item in new_items:
+                new_version.add_item(item)
+        if edits:
+            for item_name, updates in edits.items():
+                for i in new_version.items:
+                    if i.spec.name == item_name:
+                        # Apply updates, e.g., {'dimensions': {'largo': 2.0}, 'cost': {'unit_price': 2000}}
+                        if 'spec' in updates:
+                            i.spec.__dict__.update(updates['spec'])
+                        if 'cost' in updates:
+                            i.cost.__dict__.update(updates['cost'])
+                        i.update_cost()
+        self.versions.append(new_version)
+        self.current_version = new_version
+
+    def revise_client(self, feedback: str, revisions: Dict):
+        """Client revision: New version with feedback logged."""
+        self.iterate_design(changes=f"Client revision: {feedback}", edits=revisions)
+
+    def finalize(self):
+        """Lock final version, compute finals."""
+        if self.current_version:
+            self.current_version.is_final = True
+            return self.current_version.compute_totals()
+        raise ValueError("No version to finalize")
+
+    def export_to_excel(self, file_path: str):
+        """Export current version to spreadsheet."""
+        data = []
+        for item in self.current_version.items:
+            row = {
+                "Name": item.spec.name,
+                "Category": item.spec.category,
+                "Dimensions": str(item.spec.dimensions),
+                "Materials": ", ".join(item.spec.materials),
+                "Notes": item.spec.notes,
+                "Quantity": item.cost.quantity,
+                "Unit Price": item.cost.unit_price,
+                "Total": item.cost.total,
+                "Price with IVA": item.cost.price_with_iva,
+                "Profit": item.cost.profit
+            }
+            data.append(row)
+        df = pd.DataFrame(data)
+        df.to_excel(file_path, index=False)
+        # Add visuals: Use openpyxl to embed images if image_url provided
+
+    def get_diff(self, version1_id: str, version2_id: str) -> str:
+        """Compare two versions for changes (for client review)."""
+        v1 = next(v for v in self.versions if v.version_id == version1_id)
+        v2 = next(v for v in self.versions if v.version_id == version2_id)
+        # Implement diff logic: Compare items, costs, etc.
+        return "Diff placeholder: List changed items/costs"  # Expand with dictdiffer or similar
+Usage Example (Actionable Script)
+Python# New project
+q = Quotation(client_id="client123")
+q.start_new()
+
+# Initial design iteration
+item1 = QuotationItem(
+    spec=ItemSpec(name="SILLAS OPCION 1", category="Comedor", dimensions={"tela": 1.5}, materials=["Tela"]),
+    cost=ItemCost(quantity=60, unit_price=1800)
+)
+q.iterate_design(changes="Added chairs", new_items=[item1])
+
+# More iterations...
+q.iterate_design(changes="Updated materials", edits={"SILLAS OPCION 1": {"spec": {"materials": ["Melamina"]}}})
+
+# Client revision
+q.revise_client(feedback="Change quantity", revisions={"SILLAS OPCION 1": {"cost": {"quantity": 70}}})
+
+# Finalize and export
+finals = q.finalize()
+q.export_to_excel("quotation_final.xlsx")
+print(f"Final Totals: {finals}")
+Enhancements for AI Monetization
+
+AI Integration: Use your CS50AI knowledge—add ML (e.g., scikit-learn) to predict profits based on historical quotes.
