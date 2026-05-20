@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 25 / 33 batches complete.**
+**Overall progress: 26 / 33 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -98,7 +98,7 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 | Overall # | Phase ID | Batch | Status |
 |-----------|----------|-------|--------|
 | 25 | F1 | New component `AssetPackPanel.tsx` — read-only scaffolding: 6 layer tabs (Fondo, Edificio, Entorno, Destacado, Ornamentos, Personas) + composite preview thumbnail + Style sidebar slot. No data wiring yet. | ✅ DONE |
-| 26 | F2 | Wire `AssetPackPanel` into post detail page (below Pinterest Inspo, above ImageVersionNavigator) | ⬜ PENDING |
+| 26 | F2 | Wire `AssetPackPanel` into post detail page (below Pinterest Inspo, above the legacy ImageVersionNavigator) | ✅ DONE |
 | 27 | F3 | Per-tab preview rendering (layer image + status dot) | ⬜ PENDING |
 | 28 | F4 | Per-layer "Regenerar esta capa" button + per-layer notes field + per-layer "Descargar PNG" button (uses LayerResult.downloadUrl from D4) | ⬜ PENDING |
 | 29 | F5 | Per-layer "Subir mi propia" upload-replace flow | ⬜ PENDING |

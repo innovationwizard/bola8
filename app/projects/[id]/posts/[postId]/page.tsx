@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import ImageVersionNavigator from '@/app/components/ImageVersionNavigator';
 import PostReferenceImages from '@/app/components/PostReferenceImages';
+import AssetPackPanel from '@/app/components/AssetPackPanel';
 
 type Post = {
   id: string;
@@ -95,7 +96,10 @@ export default function PostDetailPage() {
         {/* Pinterest Inspo */}
         <PostReferenceImages postId={postId} projectId={projectId} />
 
-        {/* Image feedback loop */}
+        {/* Layered studio — asset pack */}
+        <AssetPackPanel postId={postId} projectId={projectId} />
+
+        {/* Image feedback loop (legacy single-image flow — preserved until cutover G1) */}
         {post.image_id ? (
           <ImageVersionNavigator imageId={post.image_id} projectId={projectId} />
         ) : (
