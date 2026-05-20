@@ -1,10 +1,23 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
-import { composeImageWithGoogle, MAX_STYLE_REFS, IMAGE_WIDTH, IMAGE_HEIGHT } from '@/lib/google-image';
+import {
+  composeImageWithGoogle,
+  generateFromRender,
+  MAX_STYLE_REFS,
+  IMAGE_WIDTH,
+  IMAGE_HEIGHT,
+} from '@/lib/google-image';
 import { STORAGE_BUCKETS, getPublicUrl, uploadBuffer } from '@/lib/storage-utils';
 import { saveImageToDatabase } from '@/lib/db/image-storage';
 import { buildBrandPromptSection, type BrandDNA, type ProjectBrandGuidelines } from '@/lib/brand';
+
+const FORMATO_NOTES: Record<string, string> = {
+  'Reel':     'Vertical video-cover format. Bold single visual, strong focal point, minimal scene complexity.',
+  'Carrusel': 'First slide of a carousel. Composition must work as standalone and invite swiping right.',
+  'Story':    'Ephemeral story format. Full-bleed vertical, bold visual impact, immediate read.',
+  'Post':     'Standard portrait feed post. Balanced composition with breathing room.',
+};
 
 async function findRootId(imageId: string): Promise<string> {
   let current = imageId;
@@ -34,7 +47,7 @@ async function collectFeedback(rootId: string) {
 
 function buildPrompt(
   feedback: Awaited<ReturnType<typeof collectFeedback>>,
-  post: { idea: string | null; texto_en_arte: string | null; descripcion: string | null } | null,
+  post: { idea: string | null; texto_en_arte: string | null; descripcion: string | null; formato: string | null } | null,
   brand: BrandDNA | null,
   projectBrand: ProjectBrandGuidelines | null,
 ): string {
@@ -44,6 +57,9 @@ function buildPrompt(
 
   const brandSection = buildBrandPromptSection(brand, projectBrand);
   if (brandSection) parts.push(brandSection);
+
+  if (post?.formato && FORMATO_NOTES[post.formato])
+    parts.push(`Format: ${FORMATO_NOTES[post.formato]}`);
 
   if (post?.idea)          parts.push(`Concept: ${post.idea}.`);
   if (post?.descripcion)   parts.push(`Brief: ${post.descripcion}.`);
@@ -60,8 +76,14 @@ function buildPrompt(
   return parts.join(' ');
 }
 
+async function downloadBuffer(bucket: string, storagePath: string): Promise<Buffer> {
+  const { data, error } = await supabase.storage.from(bucket).download(storagePath);
+  if (error) throw new Error(`Storage download failed: ${error.message}`);
+  return Buffer.from(await data.arrayBuffer());
+}
+
 export async function POST(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -89,8 +111,9 @@ export async function POST(
     const projectBrand = (image.brand_guidelines ?? null) as ProjectBrandGuidelines | null;
     const rootId       = await findRootId(id);
 
+    // Fetch post (for instructions + format) and accumulated feedback.
     const postRes = await query(
-      `SELECT idea, texto_en_arte, descripcion
+      `SELECT idea, texto_en_arte, descripcion, formato
          FROM posts
         WHERE image_id = ANY(
           SELECT id FROM images WHERE id = $1 OR parent_image_id = $1
@@ -102,40 +125,116 @@ export async function POST(
 
     const feedback = await collectFeedback(rootId);
     const prompt   = buildPrompt(feedback, post, brand, projectBrand);
-
     console.log('[regenerate] prompt:', prompt);
 
-    // Collect unique reference image storage paths from feedback history.
-    const refImageIds = [...new Set(
-      feedback.map(f => f.reference_image_id).filter((id): id is string => !!id)
+    // ── Fetch all image inputs in parallel ────────────────────────────────────
+
+    // Collect feedback reference image IDs (from prior iterations).
+    const feedbackRefIds = [...new Set(
+      feedback.map(f => f.reference_image_id).filter((rid): rid is string => !!rid)
     )].slice(0, MAX_STYLE_REFS);
 
-    let styleRefBuffers: Buffer[] | undefined;
-    if (refImageIds.length > 0) {
-      const placeholders = refImageIds.map((_, i) => `$${i + 1}`).join(', ');
-      const refRes = await query(
-        `SELECT storage_path FROM project_reference_images WHERE id IN (${placeholders})`,
-        refImageIds
+    // Post ID: look up from the post that owns this image chain.
+    const postIdRes = await query(
+      `SELECT id FROM posts WHERE image_id = ANY(
+         SELECT id FROM images WHERE id = $1 OR parent_image_id = $1
+       ) LIMIT 1`,
+      [rootId]
+    );
+    const postId = postIdRes.rows[0]?.id ?? null;
+
+    const [pinnedRenderRes, pinterestRes, projectStyleRes, feedbackRefRes] = await Promise.all([
+      // Pinned render — structural anchor.
+      query(
+        `SELECT storage_path FROM project_reference_images
+          WHERE project_id = $1 AND role = 'render' AND is_pinned = TRUE
+          LIMIT 1`,
+        [image.project_id]
+      ),
+      // Post Pinterest Inspo — highest-priority style.
+      postId
+        ? query(
+            `SELECT storage_path FROM post_reference_images
+              WHERE post_id = $1
+              ORDER BY display_order ASC, created_at ASC
+              LIMIT $2`,
+            [postId, MAX_STYLE_REFS]
+          )
+        : Promise.resolve({ rows: [] }),
+      // Project style refs — brand context.
+      query(
+        `SELECT storage_path FROM project_reference_images
+          WHERE project_id = $1 AND role = 'style'
+          ORDER BY display_order ASC, created_at ASC
+          LIMIT $2`,
+        [image.project_id, MAX_STYLE_REFS]
+      ),
+      // Feedback reference images from prior iterations.
+      feedbackRefIds.length > 0
+        ? query(
+            `SELECT storage_path FROM project_reference_images
+              WHERE id = ANY($1::uuid[])`,
+            [feedbackRefIds]
+          )
+        : Promise.resolve({ rows: [] }),
+    ]);
+
+    const pinnedRender = pinnedRenderRes.rows[0] ?? null;
+
+    // Download the current image (always needed as composition base in fallback path).
+    const currentImageBuffer = await downloadBuffer(image.s3_bucket, image.s3_key);
+
+    let newBuffer: Buffer;
+
+    if (pinnedRender) {
+      // ── Render-anchored regeneration ─────────────────────────────────────
+      console.log('[regenerate] render-anchored path');
+
+      const [renderBuffer, pinterestBuffers, styleBuffers, feedbackBuffers] = await Promise.all([
+        downloadBuffer(STORAGE_BUCKETS.UPLOADS, pinnedRender.storage_path),
+        Promise.all(pinterestRes.rows.map((r: { storage_path: string }) =>
+          downloadBuffer(STORAGE_BUCKETS.UPLOADS, r.storage_path))),
+        Promise.all(projectStyleRes.rows.map((r: { storage_path: string }) =>
+          downloadBuffer(STORAGE_BUCKETS.UPLOADS, r.storage_path))),
+        Promise.all(feedbackRefRes.rows.map((r: { storage_path: string }) =>
+          downloadBuffer(STORAGE_BUCKETS.UPLOADS, r.storage_path))),
+      ]);
+
+      // Style ref order: feedback refs first (most specific), then Pinterest Inspo, then project style.
+      const allStyleRefs = [...feedbackBuffers, ...pinterestBuffers, ...styleBuffers];
+      const pinterestCount = feedbackBuffers.length + pinterestBuffers.length;
+
+      console.log('[regenerate] feedback refs:', feedbackBuffers.length,
+        '| pinterest:', pinterestBuffers.length, '| style refs:', styleBuffers.length);
+
+      newBuffer = await generateFromRender(
+        renderBuffer,
+        prompt,
+        allStyleRefs,
+        pinterestCount,
       );
-      styleRefBuffers = await Promise.all(
-        refRes.rows.map(async (r: { storage_path: string }) => {
-          const { data, error } = await supabase.storage
-            .from(STORAGE_BUCKETS.UPLOADS)
-            .download(r.storage_path);
-          if (error) throw new Error(`Reference image download failed: ${error.message}`);
-          return Buffer.from(await data.arrayBuffer());
-        })
-      );
-      console.log('[regenerate] using', styleRefBuffers.length, 'feedback reference image(s)');
+    } else {
+      // ── Fallback: compose from current image ─────────────────────────────
+      console.log('[regenerate] fallback path — no pinned render');
+
+      const [pinterestBuffers, styleBuffers, feedbackBuffers] = await Promise.all([
+        Promise.all(pinterestRes.rows.map((r: { storage_path: string }) =>
+          downloadBuffer(STORAGE_BUCKETS.UPLOADS, r.storage_path))),
+        Promise.all(projectStyleRes.rows.map((r: { storage_path: string }) =>
+          downloadBuffer(STORAGE_BUCKETS.UPLOADS, r.storage_path))),
+        Promise.all(feedbackRefRes.rows.map((r: { storage_path: string }) =>
+          downloadBuffer(STORAGE_BUCKETS.UPLOADS, r.storage_path))),
+      ]);
+
+      const allStyleRefs = [...feedbackBuffers, ...pinterestBuffers, ...styleBuffers]
+        .slice(0, MAX_STYLE_REFS);
+
+      console.log('[regenerate] style refs total:', allStyleRefs.length);
+      newBuffer = await composeImageWithGoogle(currentImageBuffer, prompt,
+        allStyleRefs.length > 0 ? allStyleRefs : undefined);
     }
 
-    const { data: storageBlob, error: storageError } = await supabase.storage
-      .from(image.s3_bucket)
-      .download(image.s3_key);
-    if (storageError) throw new Error(`Storage download failed: ${storageError.message}`);
-    const imageBuffer = Buffer.from(await storageBlob.arrayBuffer());
-
-    const newBuffer = await composeImageWithGoogle(imageBuffer, prompt, styleRefBuffers);
+    // ── Store result ─────────────────────────────────────────────────────────
 
     const safeName    = (image.filename || 'regen.jpg').replace(/[^a-zA-Z0-9._-]/g, '-');
     const storagePath = `enhanced/${image.project_id}/${Date.now()}-regen-${safeName}`;
@@ -151,7 +250,11 @@ export async function POST(
       s3Bucket:      STORAGE_BUCKETS.COMPOSITIONS,
       filename:      image.filename,
       mimeType:      image.mime_type || 'image/jpeg',
-      metadata:      { enhancement_type: 'general', provider: 'google' },
+      metadata:      {
+        enhancement_type: 'general',
+        provider: 'google',
+        render_anchored: !!pinnedRender,
+      },
       parentImageId: rootId,
     });
 

@@ -21,7 +21,7 @@ If context is lost, READ THIS FILE FIRST to know exactly where to resume.
 | 3 | API — pin/unpin render route | ✅ DONE |
 | 4 | Lib — `generateFromRender()` function | ✅ DONE |
 | 5 | API — update `generate` route (render-anchored path) | ✅ DONE |
-| 6 | API — update `regenerate` route (consistent Layer 3) | ⬜ PENDING |
+| 6 | API — update `regenerate` route (consistent Layer 3) | ✅ DONE |
 | 7 | UI — `PostReferenceImages` component (no page wiring) | ⬜ PENDING |
 | 8 | UI — Wire Pinterest Inspo gallery to post page | ⬜ PENDING |
 | 9 | UI — Split project brand page: Renders + Style sections | ⬜ PENDING |
