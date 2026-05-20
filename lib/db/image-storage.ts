@@ -159,31 +159,6 @@ export async function saveImageToDatabase(params: SaveImageParams): Promise<Reco
 
     const savedImage = { ...result.rows[0], project_id: finalProjectId };
 
-    // Trigger automatic quotation update if this is an enhanced image (non-blocking)
-    if (params.imageType === 'enhanced' && params.metadata?.enhancement_type) {
-      // Run asynchronously without blocking
-      (async () => {
-        try {
-          const { createQuotationVersionFromImage, getOrCreateQuotation } = await import('@/lib/quotation-engine');
-          
-          // Get space_id from image_spaces if available (will be set later via UI)
-          const spaceResult = await query(
-            'SELECT space_id FROM image_spaces WHERE image_id = $1 LIMIT 1',
-            [savedImage.id]
-          );
-          const spaceId = spaceResult.rows.length > 0 ? spaceResult.rows[0].space_id : null;
-
-          // Get or create quotation and create new version
-          const quoteId = await getOrCreateQuotation(finalProjectId);
-          await createQuotationVersionFromImage(quoteId, savedImage.id, spaceId);
-          console.log('✅ Quotation automatically updated from image:', savedImage.id);
-        } catch (quoteError) {
-          // Don't fail image save if quotation update fails
-          console.error('Error triggering quotation update (non-blocking):', quoteError);
-        }
-      })();
-    }
-
     return savedImage;
   } catch (error: unknown) {
     console.error('Error saving image to database:', error);
