@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 10 / 30 batches complete.**
+**Overall progress: 11 / 30 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -66,7 +66,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 |-----------|----------|-------|--------|
 | 9 | C1 | `lib/google-image.ts` — `generateBackgroundLayer()` — Imagen text-to-image, no buildings | ✅ DONE |
 | 10 | C2 | `lib/google-image.ts` — `generateEnvironmentLayer()` — Imagen base + style apply for vegetation, isolated on neutral background | ✅ DONE |
-| 11 | C3 | `lib/google-image.ts` — `generateFeaturedLayer()` — Gemini composition, featured element | ⬜ PENDING |
+| 11 | C3 | `lib/google-image.ts` — `generateFeaturedLayer()` — Imagen base + style apply for the highlighted amenity, isolated on neutral background | ✅ DONE |
 | 12 | C4 | `lib/google-image.ts` — `generateOrnamentsLayer()` — Gemini composition, ornamental objects | ⬜ PENDING |
 | 13 | C5 | `lib/google-image.ts` — `generatePeopleLayer()` — Imagen on neutral bg + Bria | ⬜ PENDING |
 | 14 | C6 | `lib/google-image.ts` — `getBuildingLayer()` — pinned render passed through Bria | ⬜ PENDING |

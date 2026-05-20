@@ -407,3 +407,46 @@ export async function generateEnvironmentLayer(
     { ...ctx, layerType: 'environment' },
   );
 }
+
+const FEATURED_FRAMING =
+  'You are generating ONLY the FEATURED ELEMENT layer of a real-estate ' +
+  'marketing image — the single amenity, feature, or activity being ' +
+  'highlighted in this specific post (e.g. running track, pool, gym, lobby, ' +
+  'rooftop terrace). Photorealistic, 1080×1350 portrait, marketing-quality detail. ' +
+  'CRITICAL: render the featured element as the sole subject, isolated on a ' +
+  'clean NEUTRAL WHITE BACKGROUND so it can be cut out and composited in ' +
+  'Photoshop. Do not render any building behind it, any sky, any people, any ' +
+  'unrelated objects, any text. Frame the element prominently — it is the ' +
+  'narrative focus of the post.';
+
+/**
+ * Featured element layer — the amenity or activity highlighted by this post
+ * (running track, pool, gym, etc.). Optional layer: caller decides whether
+ * to generate based on post content.
+ *
+ * Two-step pipeline mirroring generateEnvironmentLayer (Imagen base → Gemini
+ * style adaptation). Caller passes the featured-element description embedded
+ * in the prompt — typically derived from the post's `idea` / `descripcion`
+ * fields.
+ *
+ * Output is opaque PNG/JPEG. Asset-pack pipeline runs through Bria for transparency.
+ */
+export async function generateFeaturedLayer(
+  prompt:          string,
+  styleRefBuffers: Buffer[]    = [],
+  ctx:             CallContext = {},
+): Promise<Buffer> {
+  const baseBuffer = await createImageWithGoogle(
+    `${FEATURED_FRAMING} ${prompt}`,
+    undefined,
+    { ...ctx, layerType: 'featured' },
+  );
+
+  if (styleRefBuffers.length === 0) return baseBuffer;
+
+  return applyStyleReferences(
+    baseBuffer,
+    styleRefBuffers,
+    { ...ctx, layerType: 'featured' },
+  );
+}
