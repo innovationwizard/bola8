@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Upload, X, Loader2, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Upload, X, Loader2, ImageIcon, Pin } from 'lucide-react';
 import { EMPTY_PROJECT_BRAND, type ProjectBrandGuidelines } from '@/lib/brand';
 import {
   SectionLabel, Field, ColorGroup, TagList,
@@ -15,6 +15,8 @@ type ReferenceImage = {
   storage_path: string;
   caption: string | null;
   display_order: number;
+  role: 'render' | 'style';
+  is_pinned: boolean;
 };
 
 export default function ProjectBrandPage() {
@@ -32,23 +34,31 @@ export default function ProjectBrandPage() {
   const [parseError, setParseError]   = useState<string | null>(null);
   const fileInputRef                  = useRef<HTMLInputElement>(null);
 
-  const [refImages, setRefImages]         = useState<ReferenceImage[]>([]);
-  const [refUploading, setRefUploading]   = useState(false);
-  const [refError, setRefError]           = useState<string | null>(null);
-  const [deletingId, setDeletingId]       = useState<string | null>(null);
-  const refInputRef                       = useRef<HTMLInputElement>(null);
+  const [renders, setRenders]               = useState<ReferenceImage[]>([]);
+  const [styles, setStyles]                 = useState<ReferenceImage[]>([]);
+  const [rendersUploading, setRendersUploading] = useState(false);
+  const [stylesUploading, setStylesUploading]   = useState(false);
+  const [renderError, setRenderError]       = useState<string | null>(null);
+  const [styleError, setStyleError]         = useState<string | null>(null);
+  const [deletingId, setDeletingId]         = useState<string | null>(null);
+  const [pinningId, setPinningId]           = useState<string | null>(null);
+  const rendersInputRef                     = useRef<HTMLInputElement>(null);
+  const stylesInputRef                      = useRef<HTMLInputElement>(null);
 
   const fetchBrand = useCallback(async () => {
     try {
-      const [brandRes, refRes] = await Promise.all([
+      const [brandRes, rendersRes, stylesRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/brand`),
-        fetch(`/api/projects/${projectId}/reference-images`),
+        fetch(`/api/projects/${projectId}/reference-images?role=render`),
+        fetch(`/api/projects/${projectId}/reference-images?role=style`),
       ]);
-      const brandData = await brandRes.json();
-      const refData   = await refRes.json();
+      const brandData   = await brandRes.json();
+      const rendersData = await rendersRes.json();
+      const stylesData  = await stylesRes.json();
       setProjectName(brandData.project_name ?? '');
       setBrand(brandData.brand_guidelines ?? EMPTY_PROJECT_BRAND);
-      setRefImages(refData.referenceImages ?? []);
+      setRenders(rendersData.referenceImages ?? []);
+      setStyles(stylesData.referenceImages ?? []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -79,7 +89,6 @@ export default function ProjectBrandPage() {
     setParsing(true);
     setParseError(null);
     try {
-      // 1 — upload each file directly to Supabase Storage (bypasses Vercel body limit)
       const uploaded: { path: string; mimeType: string }[] = [];
       for (const file of parseFiles) {
         const urlRes = await fetch(`/api/projects/${projectId}/brand/upload-url`, {
@@ -99,7 +108,6 @@ export default function ProjectBrandPage() {
         uploaded.push({ path, mimeType: file.type });
       }
 
-      // 2 — ask the server to extract project brand guidelines from the stored paths
       const res = await fetch(`/api/projects/${projectId}/brand/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -117,13 +125,20 @@ export default function ProjectBrandPage() {
     }
   };
 
-  const handleRefUpload = async (files: FileList | null) => {
+  const handleUpload = async (
+    files: FileList | null,
+    role: 'render' | 'style',
+  ) => {
     if (!files?.length) return;
-    setRefUploading(true);
-    setRefError(null);
+    const setUploading = role === 'render' ? setRendersUploading : setStylesUploading;
+    const setError     = role === 'render' ? setRenderError : setStyleError;
+    const setList      = role === 'render' ? setRenders : setStyles;
+    const inputRef     = role === 'render' ? rendersInputRef : stylesInputRef;
+
+    setUploading(true);
+    setError(null);
     try {
       for (const file of Array.from(files)) {
-        // 1 — get signed URL
         const urlRes = await fetch(`/api/projects/${projectId}/reference-images/upload-url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -132,7 +147,6 @@ export default function ProjectBrandPage() {
         if (!urlRes.ok) throw new Error('No se pudo obtener la URL de carga');
         const { signedUrl, path } = await urlRes.json();
 
-        // 2 — PUT directly to Supabase (Vercel never touches the bytes)
         const uploadRes = await fetch(signedUrl, {
           method: 'PUT',
           headers: { 'Content-Type': file.type },
@@ -140,36 +154,54 @@ export default function ProjectBrandPage() {
         });
         if (!uploadRes.ok) throw new Error(`Error al subir "${file.name}"`);
 
-        // 3 — save record
         const saveRes = await fetch(`/api/projects/${projectId}/reference-images`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ storagePath: path }),
+          body: JSON.stringify({ storagePath: path, role }),
         });
-        if (!saveRes.ok) throw new Error('Error al guardar la imagen de referencia');
+        if (!saveRes.ok) throw new Error('Error al guardar la imagen');
         const { referenceImage } = await saveRes.json();
-        setRefImages(prev => [...prev, referenceImage]);
+        setList(prev => [...prev, referenceImage]);
       }
     } catch (err) {
-      setRefError(err instanceof Error ? err.message : 'Error desconocido');
+      setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
-      setRefUploading(false);
-      if (refInputRef.current) refInputRef.current.value = '';
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
     }
   };
 
-  const handleRefDelete = async (refId: string) => {
+  const handleDelete = async (refId: string) => {
     setDeletingId(refId);
     try {
       const res = await fetch(`/api/projects/${projectId}/reference-images/${refId}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Error al eliminar');
-      setRefImages(prev => prev.filter(r => r.id !== refId));
+      setRenders(prev => prev.filter(r => r.id !== refId));
+      setStyles(prev => prev.filter(r => r.id !== refId));
     } catch (err) {
-      setRefError(err instanceof Error ? err.message : 'Error al eliminar');
+      setRenderError(err instanceof Error ? err.message : 'Error al eliminar');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handlePin = async (renderId: string) => {
+    setPinningId(renderId);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/reference-images/${renderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_pinned: true }),
+      });
+      if (!res.ok) throw new Error('Error al fijar el render');
+      // Optimistic update — only one can be pinned.
+      setRenders(prev => prev.map(r => ({ ...r, is_pinned: r.id === renderId })));
+    } catch (err) {
+      setRenderError(err instanceof Error ? err.message : 'Error al fijar');
+    } finally {
+      setPinningId(null);
     }
   };
 
@@ -217,60 +249,80 @@ export default function ProjectBrandPage() {
           </button>
         </div>
 
-        {/* Reference images */}
+        {/* Renders del proyecto */}
         <div className="bg-white border border-neutral-200 rounded-2xl p-8 space-y-5">
           <div className="flex items-center justify-between">
-            <SectionLabel>Imágenes de referencia</SectionLabel>
+            <SectionLabel>Renders del proyecto</SectionLabel>
             <button
-              onClick={() => refInputRef.current?.click()}
-              disabled={refUploading}
+              onClick={() => rendersInputRef.current?.click()}
+              disabled={rendersUploading}
               className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-800 transition-colors disabled:opacity-40"
             >
-              {refUploading
+              {rendersUploading
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <Upload className="w-3.5 h-3.5" />
               }
-              {refUploading ? 'Subiendo…' : 'Agregar'}
+              {rendersUploading ? 'Subiendo…' : 'Agregar render'}
             </button>
           </div>
           <p className="text-xs text-neutral-400 -mt-2">
-            La IA adapta el estilo visual, paleta y atmósfera de cada imagen generada para que coincidan con estas referencias.
+            Fija un render como ancla estructural — la IA lo usa como base y aplica el estilo encima. Solo uno puede estar fijado a la vez.
           </p>
           <input
-            ref={refInputRef}
+            ref={rendersInputRef}
             type="file"
             accept="image/*"
             multiple
             className="hidden"
-            onChange={e => handleRefUpload(e.target.files)}
+            onChange={e => handleUpload(e.target.files, 'render')}
           />
 
-          {refImages.length === 0 && !refUploading && (
+          {renders.length === 0 && !rendersUploading && (
             <button
-              onClick={() => refInputRef.current?.click()}
+              onClick={() => rendersInputRef.current?.click()}
               className="w-full border-2 border-dashed border-neutral-200 rounded-xl px-8 py-10 text-center hover:border-neutral-400 transition-colors"
             >
               <ImageIcon className="w-6 h-6 text-neutral-300 mx-auto mb-3" />
-              <p className="text-sm text-neutral-500 mb-1">Sin imágenes de referencia</p>
-              <p className="text-xs text-neutral-300">Clic para agregar — renders, fotografías de inspiración, mood board</p>
+              <p className="text-sm text-neutral-500 mb-1">Sin renders</p>
+              <p className="text-xs text-neutral-300">Sube renders del edificio o amenidades — la IA los usa como base estructural</p>
             </button>
           )}
 
-          {refImages.length > 0 && (
+          {renders.length > 0 && (
             <div className="grid grid-cols-3 gap-3">
-              {refImages.map(img => (
-                <div key={img.id} className="relative group rounded-xl overflow-hidden border border-neutral-200 aspect-square bg-neutral-100">
+              {renders.map(img => (
+                <div
+                  key={img.id}
+                  className={`relative group rounded-xl overflow-hidden border aspect-square bg-neutral-100 ${
+                    img.is_pinned ? 'border-neutral-900 ring-1 ring-neutral-900' : 'border-neutral-200'
+                  }`}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={img.url}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+
+                  {/* Pin button */}
                   <button
-                    onClick={() => handleRefDelete(img.id)}
+                    onClick={() => !img.is_pinned && handlePin(img.id)}
+                    disabled={pinningId === img.id || img.is_pinned}
+                    title={img.is_pinned ? 'Render anclado' : 'Fijar como ancla estructural'}
+                    className={`absolute bottom-2 left-2 p-1 bg-white border rounded-full shadow-sm transition-all ${
+                      img.is_pinned
+                        ? 'border-neutral-900 opacity-100'
+                        : 'border-neutral-200 opacity-0 group-hover:opacity-100 hover:border-neutral-600'
+                    } disabled:opacity-50`}
+                  >
+                    {pinningId === img.id
+                      ? <Loader2 className="w-3 h-3 animate-spin text-neutral-500" />
+                      : <Pin className={`w-3 h-3 ${img.is_pinned ? 'text-neutral-900' : 'text-neutral-500'}`} />
+                    }
+                  </button>
+
+                  {/* Delete button */}
+                  <button
+                    onClick={() => handleDelete(img.id)}
                     disabled={deletingId === img.id}
                     className="absolute top-2 right-2 p-1 bg-white border border-neutral-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:border-neutral-400 disabled:opacity-50"
-                    aria-label="Eliminar imagen de referencia"
+                    aria-label="Eliminar render"
                   >
                     {deletingId === img.id
                       ? <Loader2 className="w-3 h-3 animate-spin text-neutral-500" />
@@ -282,7 +334,71 @@ export default function ProjectBrandPage() {
             </div>
           )}
 
-          {refError && <p className="text-xs text-red-500">{refError}</p>}
+          {renderError && <p className="text-xs text-red-500">{renderError}</p>}
+        </div>
+
+        {/* Referencias de estilo */}
+        <div className="bg-white border border-neutral-200 rounded-2xl p-8 space-y-5">
+          <div className="flex items-center justify-between">
+            <SectionLabel>Referencias de estilo</SectionLabel>
+            <button
+              onClick={() => stylesInputRef.current?.click()}
+              disabled={stylesUploading}
+              className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-800 transition-colors disabled:opacity-40"
+            >
+              {stylesUploading
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Upload className="w-3.5 h-3.5" />
+              }
+              {stylesUploading ? 'Subiendo…' : 'Agregar'}
+            </button>
+          </div>
+          <p className="text-xs text-neutral-400 -mt-2">
+            La IA adapta el estilo visual, paleta y atmósfera de cada imagen generada para que coincidan con estas referencias.
+          </p>
+          <input
+            ref={stylesInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={e => handleUpload(e.target.files, 'style')}
+          />
+
+          {styles.length === 0 && !stylesUploading && (
+            <button
+              onClick={() => stylesInputRef.current?.click()}
+              className="w-full border-2 border-dashed border-neutral-200 rounded-xl px-8 py-10 text-center hover:border-neutral-400 transition-colors"
+            >
+              <ImageIcon className="w-6 h-6 text-neutral-300 mx-auto mb-3" />
+              <p className="text-sm text-neutral-500 mb-1">Sin referencias de estilo</p>
+              <p className="text-xs text-neutral-300">Fotografías de inspiración, mood board, renders de amenidades</p>
+            </button>
+          )}
+
+          {styles.length > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              {styles.map(img => (
+                <div key={img.id} className="relative group rounded-xl overflow-hidden border border-neutral-200 aspect-square bg-neutral-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => handleDelete(img.id)}
+                    disabled={deletingId === img.id}
+                    className="absolute top-2 right-2 p-1 bg-white border border-neutral-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:border-neutral-400 disabled:opacity-50"
+                    aria-label="Eliminar referencia de estilo"
+                  >
+                    {deletingId === img.id
+                      ? <Loader2 className="w-3 h-3 animate-spin text-neutral-500" />
+                      : <X className="w-3 h-3 text-neutral-600" />
+                    }
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {styleError && <p className="text-xs text-red-500">{styleError}</p>}
         </div>
 
         {/* Parse from files */}
