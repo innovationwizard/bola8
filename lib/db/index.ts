@@ -10,7 +10,7 @@ const pool = new Pool({
 
 export default pool;
 
-export type QueryParam = string | number | boolean | null;
+export type QueryParam = string | number | boolean | null | string[] | number[] | Buffer | Date;
 export type QueryParams = QueryParam[];
 
 export async function query(text: string, params?: QueryParams) {

@@ -212,6 +212,7 @@ export async function POST(
         prompt,
         allStyleRefs,
         pinterestCount,
+        { route: '/api/images/[id]/regenerate', postId, projectId: image.project_id },
       );
     } else {
       // ── Fallback: compose from current image ─────────────────────────────
@@ -230,8 +231,12 @@ export async function POST(
         .slice(0, MAX_STYLE_REFS);
 
       console.log('[regenerate] style refs total:', allStyleRefs.length);
-      newBuffer = await composeImageWithGoogle(currentImageBuffer, prompt,
-        allStyleRefs.length > 0 ? allStyleRefs : undefined);
+      newBuffer = await composeImageWithGoogle(
+        currentImageBuffer,
+        prompt,
+        allStyleRefs.length > 0 ? allStyleRefs : undefined,
+        { route: '/api/images/[id]/regenerate', postId, projectId: image.project_id },
+      );
     }
 
     // ── Store result ─────────────────────────────────────────────────────────

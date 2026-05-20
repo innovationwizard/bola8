@@ -127,13 +127,16 @@ export async function POST(
         prompt,
         [...pinterestBuffers, ...styleBuffers],
         pinterestBuffers.length,
+        { route: '/api/posts/[id]/generate', postId: id, projectId: row.project_id },
       );
     } else {
       // ── Fallback: Imagen text-to-image path ──────────────────────────────
       // No pinned render — generate from text, then apply style refs.
       console.log('[generate] fallback path — no pinned render');
 
-      imageBuffer = await createImageWithGoogle(prompt);
+      imageBuffer = await createImageWithGoogle(prompt, undefined, {
+        route: '/api/posts/[id]/generate', postId: id, projectId: row.project_id,
+      });
 
       const allStyleRows = [...pinterestRes.rows, ...styleRefRes.rows].slice(0, MAX_STYLE_REFS);
       if (allStyleRows.length > 0) {
@@ -141,7 +144,9 @@ export async function POST(
           allStyleRows.map((r: { storage_path: string }) => downloadBuffer(r.storage_path))
         );
         console.log('[generate] applying', styleBuffers.length, 'style reference(s)');
-        imageBuffer = await applyStyleReferences(imageBuffer, styleBuffers);
+        imageBuffer = await applyStyleReferences(imageBuffer, styleBuffers, {
+          route: '/api/posts/[id]/generate', postId: id, projectId: row.project_id,
+        });
       }
     }
 

@@ -43,8 +43,12 @@ export interface ImageMetadata {
   generationId?: string;
   // Training-specific fields
   option?: string; // 'A', 'B', etc.
-  provider?: string; // 'leonardo', 'stablediffusion'
+  provider?: string; // 'leonardo', 'stablediffusion', 'google'
   prompt_version?: string;
+  // Render-anchored generation flag (set by generate + regenerate when a pinned render is used as base)
+  render_anchored?: boolean;
+  // Post linkage (set by generate route for traceability)
+  post_id?: string;
 }
 
 export interface SaveImageParams {

@@ -50,7 +50,11 @@ export async function POST(
 
     console.log(`[brand/parse] ${inlineFiles.length} file(s) for client ${id}`);
 
-    const rawJson = await extractBrandFromDocuments(BRAND_EXTRACTION_PROMPT, inlineFiles);
+    const rawJson = await extractBrandFromDocuments(
+      BRAND_EXTRACTION_PROMPT,
+      inlineFiles,
+      { route: '/api/clients/[id]/brand/parse' },
+    );
 
     let extracted: BrandDNA;
     try {

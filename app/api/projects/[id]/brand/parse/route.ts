@@ -53,7 +53,11 @@ export async function POST(
 
     console.log(`[projects/brand/parse] ${inlineFiles.length} file(s) for project ${id}`);
 
-    const rawJson = await extractBrandFromDocuments(PROJECT_BRAND_EXTRACTION_PROMPT, inlineFiles);
+    const rawJson = await extractBrandFromDocuments(
+      PROJECT_BRAND_EXTRACTION_PROMPT,
+      inlineFiles,
+      { route: '/api/projects/[id]/brand/parse', projectId: id },
+    );
 
     let extracted: ProjectBrandGuidelines;
     try {
