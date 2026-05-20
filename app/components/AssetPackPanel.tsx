@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Layers, Loader2 } from 'lucide-react';
+import { Layers, Loader2, RefreshCw, Download } from 'lucide-react';
 
 export type LayerTabType =
   | 'background'
@@ -80,10 +80,13 @@ interface AssetPackPanelProps {
 }
 
 export default function AssetPackPanel({ postId, projectId: _projectId }: AssetPackPanelProps) {
-  const [activeTab, setActiveTab] = useState<LayerTabType>('background');
-  const [pack, setPack]           = useState<ApiPack | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const [activeTab, setActiveTab]   = useState<LayerTabType>('background');
+  const [pack, setPack]             = useState<ApiPack | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+  const [notes, setNotes]           = useState<Partial<Record<LayerTabType, string>>>({});
+  const [regenerating, setRegenerating] = useState<LayerTabType | null>(null);
+  const [regenErrors, setRegenErrors] = useState<Partial<Record<LayerTabType, string>>>({});
 
   const fetchPack = useCallback(async () => {
     setLoading(true);
@@ -101,6 +104,35 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
   }, [postId]);
 
   useEffect(() => { fetchPack(); }, [fetchPack]);
+
+  const handleRegenerate = useCallback(async (layerType: LayerTabType) => {
+    setRegenerating(layerType);
+    setRegenErrors((prev) => ({ ...prev, [layerType]: undefined }));
+    try {
+      const res = await fetch(`/api/posts/${postId}/asset-pack/layers/${layerType}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refinementPrompt: notes[layerType] ?? '' }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const updatedLayer = await res.json() as ApiLayer;
+      setPack((prev) => {
+        if (!prev) return prev;
+        const others = (prev.layers ?? []).filter((l) => l.layerType !== updatedLayer.layerType);
+        return { ...prev, layers: [...others, updatedLayer] };
+      });
+    } catch (e) {
+      setRegenErrors((prev) => ({
+        ...prev,
+        [layerType]: e instanceof Error ? e.message : 'Error desconocido',
+      }));
+    } finally {
+      setRegenerating(null);
+    }
+  }, [postId, notes]);
 
   const layers       = pack?.layers ?? [];
   const composite    = layers.find((l) => l.layerType === 'composite');
@@ -187,7 +219,7 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
           </div>
 
           {/* Active tab body */}
-          <div className="p-6 min-h-[280px]">
+          <div className="p-6 min-h-[280px] space-y-5">
             <LayerBody
               loading={loading}
               packStatus={packStatus}
@@ -196,6 +228,20 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
               labelHint={active.hint}
               label={active.label}
             />
+
+            {/* Actions appear once the pack exists, regardless of whether this layer is filled */}
+            {!loading && pack?.assetPackId && packStatus !== 'generating' && (
+              <LayerActions
+                layerType={activeTab}
+                label={active.label}
+                layer={activeLayer}
+                notes={notes[activeTab] ?? ''}
+                onNotesChange={(v) => setNotes((prev) => ({ ...prev, [activeTab]: v }))}
+                regenerating={regenerating === activeTab}
+                regenError={regenErrors[activeTab]}
+                onRegenerate={() => handleRegenerate(activeTab)}
+              />
+            )}
           </div>
         </div>
 
@@ -322,6 +368,72 @@ function LayerBody({
       <p className="text-[10px] text-neutral-400">
         {layer.transparencyApplied ? 'PNG con fondo transparente' : 'PNG opaco'}
       </p>
+    </div>
+  );
+}
+
+function LayerActions({
+  layerType: _layerType,
+  label,
+  layer,
+  notes,
+  onNotesChange,
+  regenerating,
+  regenError,
+  onRegenerate,
+}: {
+  layerType:     LayerTabType;
+  label:         string;
+  layer:         ApiLayer | undefined;
+  notes:         string;
+  onNotesChange: (v: string) => void;
+  regenerating:  boolean;
+  regenError:    string | undefined;
+  onRegenerate:  () => void;
+}) {
+  return (
+    <div className="space-y-3 border-t border-neutral-100 pt-5">
+      <div>
+        <label className="block text-xs uppercase tracking-[0.15em] text-neutral-400 mb-2">
+          Notas para esta capa — opcional
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          disabled={regenerating}
+          placeholder={`Indicaciones específicas para regenerar ${label.toLowerCase()} — ej. "persona corriendo en ropa deportiva, a media zancada"`}
+          rows={2}
+          className="w-full text-sm text-neutral-700 placeholder-neutral-300 border border-neutral-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-neutral-400 transition-colors disabled:opacity-50"
+        />
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={onRegenerate}
+          disabled={regenerating}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white text-xs rounded-lg hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {regenerating
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <RefreshCw className="w-3.5 h-3.5" />}
+          {regenerating ? 'Regenerando…' : (layer ? 'Regenerar esta capa' : 'Generar esta capa')}
+        </button>
+
+        {layer?.downloadUrl && (
+          <a
+            href={layer.downloadUrl}
+            download={`${_layerType}.png`}
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs border border-neutral-200 rounded-lg text-neutral-700 hover:border-neutral-400 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Descargar PNG
+          </a>
+        )}
+      </div>
+
+      {regenError && (
+        <p className="text-xs text-red-500">{regenError}</p>
+      )}
     </div>
   );
 }
