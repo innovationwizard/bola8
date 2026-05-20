@@ -40,76 +40,78 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
+**Overall progress: 9 / 30 batches complete.**
+
 ### Phase A — Backend foundation (no FAL needed)
 
-| # | Batch | Status |
-|---|-------|--------|
-| A1 | DB migration: `asset_packs`, `images` columns, `posts.active_asset_pack_id`, `api_usage_logs` | ✅ DONE |
-| A2 | `lib/api-usage.ts` — logging primitive + pricing constants table | ✅ DONE |
-| A3 | Wire `api-usage` into existing Google API functions (instrumentation only, no behavior change) | ✅ DONE |
-| A4 | `lib/style-card.ts` — pure synthesis function (no API calls) | ✅ DONE |
-| A5 | `lib/superuser.ts` — Supabase auth check + SUPERUSER_EMAILS allowlist | ✅ DONE |
+| Overall # | Phase ID | Batch | Status |
+|-----------|----------|-------|--------|
+| 1 | A1 | DB migration: `asset_packs`, `images` columns, `posts.active_asset_pack_id`, `api_usage_logs` | ✅ DONE |
+| 2 | A2 | `lib/api-usage.ts` — logging primitive + pricing constants table | ✅ DONE |
+| 3 | A3 | Wire `api-usage` into existing Google API functions (instrumentation only, no behavior change) | ✅ DONE |
+| 4 | A4 | `lib/style-card.ts` — pure synthesis function (no API calls) | ✅ DONE |
+| 5 | A5 | `lib/superuser.ts` — Supabase auth check + SUPERUSER_EMAILS allowlist | ✅ DONE |
 
 ### Phase B — FAL integration with graceful fallback
 
-| # | Batch | Status |
-|---|-------|--------|
-| B1 | `lib/fal.ts` — FAL_AVAILABLE constant + client init helper + fal API wrapper | ✅ DONE |
-| B2 | `lib/bria.ts` — `removeBackground()` with graceful fallback (returns input unchanged if !FAL_AVAILABLE) | ✅ DONE |
-| B3 | `lib/qwen-layered.ts` — `decomposeIntoLayers()` with graceful fallback (returns null if !FAL_AVAILABLE) | ✅ DONE |
+| Overall # | Phase ID | Batch | Status |
+|-----------|----------|-------|--------|
+| 6 | B1 | `lib/fal.ts` — FAL_AVAILABLE constant + client init helper + fal API wrapper | ✅ DONE |
+| 7 | B2 | `lib/bria.ts` — `removeBackground()` with graceful fallback (returns input unchanged if !FAL_AVAILABLE) | ✅ DONE |
+| 8 | B3 | `lib/qwen-layered.ts` — `decomposeIntoLayers()` with graceful fallback (returns null if !FAL_AVAILABLE) | ✅ DONE |
 
 ### Phase C — Per-layer generation (opaque output, FAL optional for cutout)
 
-| # | Batch | Status |
-|---|-------|--------|
-| C1 | `lib/google-image.ts` — `generateBackgroundLayer()` — Imagen text-to-image, no buildings | ⬜ PENDING |
-| C2 | `lib/google-image.ts` — `generateEnvironmentLayer()` — Gemini composition, vegetation | ⬜ PENDING |
-| C3 | `lib/google-image.ts` — `generateFeaturedLayer()` — Gemini composition, featured element | ⬜ PENDING |
-| C4 | `lib/google-image.ts` — `generateOrnamentsLayer()` — Gemini composition, ornamental objects | ⬜ PENDING |
-| C5 | `lib/google-image.ts` — `generatePeopleLayer()` — Imagen on neutral bg + Bria | ⬜ PENDING |
-| C6 | `lib/google-image.ts` — `getBuildingLayer()` — pinned render passed through Bria | ⬜ PENDING |
+| Overall # | Phase ID | Batch | Status |
+|-----------|----------|-------|--------|
+| 9 | C1 | `lib/google-image.ts` — `generateBackgroundLayer()` — Imagen text-to-image, no buildings | ✅ DONE |
+| 10 | C2 | `lib/google-image.ts` — `generateEnvironmentLayer()` — Gemini composition, vegetation | ⬜ PENDING |
+| 11 | C3 | `lib/google-image.ts` — `generateFeaturedLayer()` — Gemini composition, featured element | ⬜ PENDING |
+| 12 | C4 | `lib/google-image.ts` — `generateOrnamentsLayer()` — Gemini composition, ornamental objects | ⬜ PENDING |
+| 13 | C5 | `lib/google-image.ts` — `generatePeopleLayer()` — Imagen on neutral bg + Bria | ⬜ PENDING |
+| 14 | C6 | `lib/google-image.ts` — `getBuildingLayer()` — pinned render passed through Bria | ⬜ PENDING |
 
 ### Phase D — Asset pack API surface
 
-| # | Batch | Status |
-|---|-------|--------|
-| D1 | `POST /api/posts/[id]/asset-pack` — orchestrate hybrid pipeline (composition + decompose OR per-layer fallback) | ⬜ PENDING |
-| D2 | `GET /api/posts/[id]/asset-pack` — fetch active pack with signed URLs per layer | ⬜ PENDING |
-| D3 | `POST /api/posts/[id]/asset-pack/layers/[type]` — single-layer regeneration | ⬜ PENDING |
-| D4 | `GET /api/posts/[id]/asset-pack/zip` — stream ZIP of named layer PNGs + composite + style.json | ⬜ PENDING |
+| Overall # | Phase ID | Batch | Status |
+|-----------|----------|-------|--------|
+| 15 | D1 | `POST /api/posts/[id]/asset-pack` — orchestrate hybrid pipeline (composition + decompose OR per-layer fallback) | ⬜ PENDING |
+| 16 | D2 | `GET /api/posts/[id]/asset-pack` — fetch active pack with signed URLs per layer | ⬜ PENDING |
+| 17 | D3 | `POST /api/posts/[id]/asset-pack/layers/[type]` — single-layer regeneration | ⬜ PENDING |
+| 18 | D4 | `GET /api/posts/[id]/asset-pack/zip` — stream ZIP of named layer PNGs + composite + style.json | ⬜ PENDING |
 
 ### Phase E — Operator dashboard
 
-| # | Batch | Status |
-|---|-------|--------|
-| E1 | `GET /api/admin/usage` — aggregations (totals, per-project, per-model, daily/weekly/monthly) | ⬜ PENDING |
-| E2 | `GET /api/admin/usage/calls` — paginated recent calls list with full detail | ⬜ PENDING |
-| E3 | UI page `/admin/usage` — totals + breakdowns + recent calls table + FAL availability indicator | ⬜ PENDING |
+| Overall # | Phase ID | Batch | Status |
+|-----------|----------|-------|--------|
+| 19 | E1 | `GET /api/admin/usage` — aggregations (totals, per-project, per-model, daily/weekly/monthly) | ⬜ PENDING |
+| 20 | E2 | `GET /api/admin/usage/calls` — paginated recent calls list with full detail | ⬜ PENDING |
+| 21 | E3 | UI page `/admin/usage` — totals + breakdowns + recent calls table + FAL availability indicator | ⬜ PENDING |
 
 ### Phase F — User UI: Layered Studio
 
-| # | Batch | Status |
-|---|-------|--------|
-| F1 | New component `AssetPackPanel.tsx` — tab structure (7 tabs + sidebar slot), read-only scaffolding | ⬜ PENDING |
-| F2 | Wire `AssetPackPanel` into post detail page (below Pinterest Inspo, above ImageVersionNavigator) | ⬜ PENDING |
-| F3 | Per-tab preview rendering (layer image + status dot) | ⬜ PENDING |
-| F4 | Per-layer "Regenerar esta capa" button + per-layer notes field | ⬜ PENDING |
-| F5 | Per-layer "Subir mi propia" upload-replace flow | ⬜ PENDING |
-| F6 | Pack-level "Generar pack completo" + "Descargar ZIP" actions | ⬜ PENDING |
-| F7 | Style card sidebar (palette swatches + mood text + Pinterest thumbnails) | ⬜ PENDING |
+| Overall # | Phase ID | Batch | Status |
+|-----------|----------|-------|--------|
+| 22 | F1 | New component `AssetPackPanel.tsx` — tab structure (7 tabs + sidebar slot), read-only scaffolding | ⬜ PENDING |
+| 23 | F2 | Wire `AssetPackPanel` into post detail page (below Pinterest Inspo, above ImageVersionNavigator) | ⬜ PENDING |
+| 24 | F3 | Per-tab preview rendering (layer image + status dot) | ⬜ PENDING |
+| 25 | F4 | Per-layer "Regenerar esta capa" button + per-layer notes field | ⬜ PENDING |
+| 26 | F5 | Per-layer "Subir mi propia" upload-replace flow | ⬜ PENDING |
+| 27 | F6 | Pack-level "Generar pack completo" + "Descargar ZIP" actions | ⬜ PENDING |
+| 28 | F7 | Style card sidebar (palette swatches + mood text + Pinterest thumbnails) | ⬜ PENDING |
 
 ### Phase G — Cutover
 
-| # | Batch | Status |
-|---|-------|--------|
-| G1 | New posts default to layered output (single-image generate still reachable as legacy) | ⬜ PENDING |
-| G2 | Documentation pass: changelog entry + update master workflow memory | ⬜ PENDING |
+| Overall # | Phase ID | Batch | Status |
+|-----------|----------|-------|--------|
+| 29 | G1 | New posts default to layered output (single-image generate still reachable as legacy) | ⬜ PENDING |
+| 30 | G2 | Documentation pass: changelog entry + update master workflow memory | ⬜ PENDING |
 
 ---
 
 ## Resume Instructions (if context is lost)
 
-1. Read this file. Find the first `⬜ PENDING` batch.
+1. Read this file. Update the "Overall progress: X / 30" line. Find the first `⬜ PENDING` batch by Overall #.
 2. Read [PLAN_LAYERED_WORKFLOW.md](PLAN_LAYERED_WORKFLOW.md) for the architectural context.
 3. Read [AUDIT_LAYERED_WORKFLOW_GAPS.md](AUDIT_LAYERED_WORKFLOW_GAPS.md) for the gap analysis behind that batch.
 4. Read the memory files for project context — especially:

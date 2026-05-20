@@ -325,3 +325,41 @@ export async function extractBrandFromDocuments(
     },
   );
 }
+
+// ============================================================================
+// PER-LAYER GENERATION
+// Each generator outputs ONE semantic layer of the final marketing image so
+// the designer can composite them in Photoshop. Outputs are opaque (PNGs/JPEGs);
+// the asset-pack route runs the non-background layers through Bria to get
+// transparency. Background stays opaque — it IS the back layer.
+//
+// Every layer prompt inherits the brand + project + Pinterest Inspo context
+// from the caller so the eight outputs read as one coherent image. Framing
+// strings here narrow the model's scope per layer.
+// ============================================================================
+
+const BACKGROUND_FRAMING =
+  'You are generating ONLY the BACKGROUND environment layer of a real-estate ' +
+  'marketing image — sky, atmosphere, and distant landscape that establishes ' +
+  'the setting. Photorealistic, 1080×1350 portrait composition. ' +
+  'CRITICAL: do not render any building, any architecture, any people, any ' +
+  'vehicles, any foreground objects, any text. This layer is the back plate — ' +
+  'the building and other elements will be composited on top in Photoshop. ' +
+  'Leave compositional breathing room (typically lower-center) where a ' +
+  'vertical building shape will be placed.';
+
+/**
+ * Background layer — wide environmental scene with no buildings, no people.
+ * Uses Imagen 4 Ultra text-to-image. Output is opaque (this layer is the
+ * back plate of the composition).
+ */
+export async function generateBackgroundLayer(
+  prompt: string,
+  ctx:    CallContext = {},
+): Promise<Buffer> {
+  return createImageWithGoogle(
+    `${BACKGROUND_FRAMING} ${prompt}`,
+    undefined,
+    { ...ctx, layerType: 'background' },
+  );
+}
