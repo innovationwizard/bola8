@@ -89,6 +89,8 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
   const [regenErrors, setRegenErrors]   = useState<Partial<Record<LayerTabType, string>>>({});
   const [uploading, setUploading]       = useState<LayerTabType | null>(null);
   const [uploadErrors, setUploadErrors] = useState<Partial<Record<LayerTabType, string>>>({});
+  const [generating, setGenerating]     = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const fetchPack = useCallback(async () => {
     setLoading(true);
@@ -106,6 +108,24 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
   }, [postId]);
 
   useEffect(() => { fetchPack(); }, [fetchPack]);
+
+  const handleGeneratePack = useCallback(async () => {
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const res = await fetch(`/api/posts/${postId}/asset-pack`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json() as ApiPack;
+      setPack(data);
+    } catch (e) {
+      setGenerateError(e instanceof Error ? e.message : 'Error desconocido');
+    } finally {
+      setGenerating(false);
+    }
+  }, [postId]);
 
   const handleUpload = useCallback(async (layerType: LayerTabType, file: File) => {
     setUploading(layerType);
@@ -207,17 +227,24 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
           </p>
         </div>
         <button
-          disabled
-          className="inline-flex items-center gap-2 px-4 py-2 text-xs text-neutral-400 border border-dashed border-neutral-200 rounded-lg cursor-not-allowed"
-          title="Disponible en F6"
+          onClick={handleGeneratePack}
+          disabled={generating || loading}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white text-xs rounded-lg hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          <Layers className="w-3.5 h-3.5" />
-          Generar pack completo
+          {generating
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <Layers className="w-3.5 h-3.5" />}
+          {generating
+            ? 'Generando pack…'
+            : (pack?.assetPackId ? 'Regenerar pack completo' : 'Generar pack completo')}
         </button>
       </div>
 
       {error && (
         <p className="text-xs text-red-500">No se pudo cargar el pack: {error}</p>
+      )}
+      {generateError && (
+        <p className="text-xs text-red-500">No se pudo generar el pack: {generateError}</p>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-4">
