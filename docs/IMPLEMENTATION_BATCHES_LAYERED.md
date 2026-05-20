@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 14 / 33 batches complete.**
+**Overall progress: 15 / 33 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -77,7 +77,7 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 
 | Overall # | Phase ID | Batch | Status |
 |-----------|----------|-------|--------|
-| 15 | D1.1 | `lib/asset-pack-builder.ts` — types (LayerType, BuildContext, PackResult) + Supabase storage helpers (upload layer PNG, build named storage path) + DB helpers (insert pack row, insert layer image row, update pack status) | ⬜ PENDING |
+| 15 | D1.1 | `lib/asset-pack-builder.ts` — types (LayerType, BuildContext, PackResult) + Supabase storage helpers (upload layer PNG, build named storage path) + DB helpers (insert pack row, insert layer image row, update pack status) | ✅ DONE |
 | 16 | D1.2 | `lib/asset-pack-builder.ts` — `createAssetPackPerLayer()`: fetch inputs, generate all 6 layers in parallel, apply Bria to C2–C5 outputs, upload + persist | ⬜ PENDING |
 | 17 | D1.3 | `lib/asset-pack-builder.ts` — `createAssetPackHybrid()`: Gemini composition → Qwen decompose → upload; falls back to per-layer when Qwen returns null | ⬜ PENDING |
 | 18 | D1.4 | `POST /api/posts/[id]/asset-pack` route handler — thin wrapper that picks `createAssetPackHybrid` (default) vs `createAssetPackPerLayer` based on FAL availability + request body | ⬜ PENDING |
