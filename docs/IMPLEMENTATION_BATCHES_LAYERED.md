@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 30 / 33 batches complete.**
+**Overall progress: 31 / 34 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -103,20 +103,21 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 | 28 | F4 | Per-layer actions: notes textarea + Regenerar button (POSTs `/asset-pack/layers/[type]` with refinementPrompt body, swaps the returned layer into local state) + Descargar PNG anchor (uses LayerResult.downloadUrl). Per-tab regen + error state. | ✅ DONE |
 | 29 | F5 | Per-layer "Subir mi propia" upload-replace flow: new `upload-url` route mints signed Supabase upload URL targeting canonical path; new PUT method on layers/[type] verifies the file exists then swaps the images row; UI hidden file input + Subir button + upload state | ✅ DONE |
 | 30 | F6 | Pack-level "Generar pack completo" action — POSTs `/api/posts/[id]/asset-pack`, updates local pack state on success; button switches label to "Regenerar pack completo" once a pack exists; shows loader during generation; inline error surface | ✅ DONE |
-| 31 | F7 | Style card sidebar (palette swatches + mood text + Pinterest thumbnails) | ⬜ PENDING |
+| 31 | F6.1 | Generation progress indicator — slim banner with elapsed/estimated fill bar + "~Ns restantes" countdown during pack generation. Caps at 95% pre-completion; switches to "Casi listo…" past the estimate. Backed by [[feedback-show-progress-for-long-ops]]. | ✅ DONE |
+| 32 | F7 | Style card sidebar (palette swatches + mood text + Pinterest thumbnails) | ⬜ PENDING |
 
 ### Phase G — Cutover
 
 | Overall # | Phase ID | Batch | Status |
 |-----------|----------|-------|--------|
-| 32 | G1 | New posts default to layered output (single-image generate still reachable as legacy) | ⬜ PENDING |
-| 33 | G2 | Documentation pass: changelog entry + update master workflow memory | ⬜ PENDING |
+| 33 | G1 | New posts default to layered output (single-image generate still reachable as legacy) | ⬜ PENDING |
+| 34 | G2 | Documentation pass: changelog entry + update master workflow memory | ⬜ PENDING |
 
 ---
 
 ## Resume Instructions (if context is lost)
 
-1. Read this file. Update the "Overall progress: X / 33" line. Find the first `⬜ PENDING` batch by Overall #.
+1. Read this file. Update the "Overall progress: X / 34" line. Find the first `⬜ PENDING` batch by Overall #.
 2. Read [PLAN_LAYERED_WORKFLOW.md](PLAN_LAYERED_WORKFLOW.md) for the architectural context.
 3. Read [AUDIT_LAYERED_WORKFLOW_GAPS.md](AUDIT_LAYERED_WORKFLOW_GAPS.md) for the gap analysis behind that batch.
 4. Read the memory files for project context — especially:

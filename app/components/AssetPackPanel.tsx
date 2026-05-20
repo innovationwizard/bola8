@@ -18,6 +18,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Layers, Loader2, RefreshCw, Download, Upload } from 'lucide-react';
 
+/** Roughly observed pack-generation time on the hybrid path. Drives the
+ * countdown — UI caps the fill bar at 95% so it never claims "done" prematurely. */
+const ESTIMATED_GEN_SECONDS = 60;
+
 export type LayerTabType =
   | 'background'
   | 'building'
@@ -91,6 +95,8 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
   const [uploadErrors, setUploadErrors] = useState<Partial<Record<LayerTabType, string>>>({});
   const [generating, setGenerating]     = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [elapsedSec, setElapsedSec]     = useState(0);
+  const genStartedAtRef                 = useRef<number | null>(null);
 
   const fetchPack = useCallback(async () => {
     setLoading(true);
@@ -108,6 +114,24 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
   }, [postId]);
 
   useEffect(() => { fetchPack(); }, [fetchPack]);
+
+  // Tick elapsed seconds while a generation is in flight so the banner can
+  // show a roughly realistic countdown + fill bar.
+  useEffect(() => {
+    if (!generating) {
+      genStartedAtRef.current = null;
+      setElapsedSec(0);
+      return;
+    }
+    genStartedAtRef.current = Date.now();
+    setElapsedSec(0);
+    const interval = setInterval(() => {
+      if (genStartedAtRef.current) {
+        setElapsedSec(Math.floor((Date.now() - genStartedAtRef.current) / 1000));
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [generating]);
 
   const handleGeneratePack = useCallback(async () => {
     setGenerating(true);
@@ -245,6 +269,10 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
       )}
       {generateError && (
         <p className="text-xs text-red-500">No se pudo generar el pack: {generateError}</p>
+      )}
+
+      {generating && (
+        <GenerationProgressBanner elapsedSec={elapsedSec} />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-4">
@@ -542,6 +570,27 @@ function LayerActions({
 
       {regenError  && <p className="text-xs text-red-500">{regenError}</p>}
       {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+    </div>
+  );
+}
+
+function GenerationProgressBanner({ elapsedSec }: { elapsedSec: number }) {
+  const remaining = Math.max(0, ESTIMATED_GEN_SECONDS - elapsedSec);
+  const progress  = Math.min(95, Math.round((elapsedSec / ESTIMATED_GEN_SECONDS) * 100));
+  const label     = remaining > 0 ? `~${remaining}s restantes` : 'Casi listo…';
+
+  return (
+    <div className="border border-neutral-200 rounded-lg p-3 bg-neutral-50 space-y-2">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-neutral-700">Generando pack…</span>
+        <span className="text-neutral-500 font-mono tabular-nums">{label}</span>
+      </div>
+      <div className="h-1 bg-neutral-200 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-neutral-900 transition-all duration-500 ease-linear"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
     </div>
   );
 }
