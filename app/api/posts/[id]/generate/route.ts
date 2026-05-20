@@ -4,12 +4,20 @@ import { supabase } from '@/lib/supabase';
 import {
   createImageWithGoogle,
   applyStyleReferences,
+  generateFromRender,
   MAX_STYLE_REFS,
   IMAGE_WIDTH,
   IMAGE_HEIGHT,
 } from '@/lib/google-image';
 import { STORAGE_BUCKETS, getPublicUrl, uploadBuffer } from '@/lib/storage-utils';
 import { buildBrandPromptSection, type BrandDNA, type ProjectBrandGuidelines } from '@/lib/brand';
+
+const FORMATO_NOTES: Record<string, string> = {
+  'Reel':     'Vertical video-cover format. Bold single visual, strong focal point, minimal scene complexity.',
+  'Carrusel': 'First slide of a carousel. Composition must work as standalone and invite swiping right.',
+  'Story':    'Ephemeral story format. Full-bleed vertical, bold visual impact, immediate read.',
+  'Post':     'Standard portrait feed post. Balanced composition with breathing room.',
+};
 
 function buildPrompt(
   post: { idea: string | null; descripcion: string | null; texto_en_arte: string | null; formato: string | null },
@@ -23,11 +31,22 @@ function buildPrompt(
   const brandSection = buildBrandPromptSection(brand, projectBrand);
   if (brandSection) parts.push(brandSection);
 
+  if (post.formato && FORMATO_NOTES[post.formato])
+    parts.push(`Format: ${FORMATO_NOTES[post.formato]}`);
+
   if (post.idea)          parts.push(`Concept: ${post.idea}.`);
   if (post.descripcion)   parts.push(`Brief: ${post.descripcion}.`);
-  if (post.texto_en_arte) parts.push(`The image will carry this display text — design the visual to complement it (do not render the text itself): &ldquo;${post.texto_en_arte}&rdquo;.`);
+  if (post.texto_en_arte) parts.push(`The image will carry this display text — design the visual to complement it (do not render the text itself): "${post.texto_en_arte}".`);
 
   return parts.join(' ');
+}
+
+async function downloadBuffer(storagePath: string): Promise<Buffer> {
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKETS.UPLOADS)
+    .download(storagePath);
+  if (error) throw new Error(`Storage download failed: ${error.message}`);
+  return Buffer.from(await data.arrayBuffer());
 }
 
 export async function POST(
@@ -58,30 +77,75 @@ export async function POST(
 
     console.log('[generate] post:', id, '| prompt:', prompt);
 
-    // Fetch up to MAX_STYLE_REFS reference images for this project.
-    const refRes = await query(
-      `SELECT storage_path FROM project_reference_images
-        WHERE project_id = $1
-        ORDER BY display_order ASC, created_at ASC
-        LIMIT $2`,
-      [row.project_id, MAX_STYLE_REFS]
-    );
+    // ── Fetch all image inputs in parallel ────────────────────────────────────
 
-    let imageBuffer = await createImageWithGoogle(prompt);
+    const [pinnedRenderRes, pinterestRes, styleRefRes] = await Promise.all([
+      // Pinned project render — structural anchor for the building.
+      query(
+        `SELECT storage_path FROM project_reference_images
+          WHERE project_id = $1 AND role = 'render' AND is_pinned = TRUE
+          LIMIT 1`,
+        [row.project_id]
+      ),
+      // Post-level Pinterest Inspo — highest-priority style direction (max 3).
+      query(
+        `SELECT storage_path FROM post_reference_images
+          WHERE post_id = $1
+          ORDER BY display_order ASC, created_at ASC
+          LIMIT $2`,
+        [id, MAX_STYLE_REFS]
+      ),
+      // Project-level style references — supporting brand context.
+      query(
+        `SELECT storage_path FROM project_reference_images
+          WHERE project_id = $1 AND role = 'style'
+          ORDER BY display_order ASC, created_at ASC
+          LIMIT $2`,
+        [row.project_id, MAX_STYLE_REFS]
+      ),
+    ]);
 
-    if (refRes.rows.length > 0) {
-      const styleBuffers = await Promise.all(
-        refRes.rows.map(async (r: { storage_path: string }) => {
-          const { data, error } = await supabase.storage
-            .from(STORAGE_BUCKETS.UPLOADS)
-            .download(r.storage_path);
-          if (error) throw new Error(`Reference image download failed: ${error.message}`);
-          return Buffer.from(await data.arrayBuffer());
-        })
+    const pinnedRender = pinnedRenderRes.rows[0] ?? null;
+
+    let imageBuffer: Buffer;
+
+    if (pinnedRender) {
+      // ── Render-anchored path ─────────────────────────────────────────────
+      // The pinned render is the structural base. Pinterest Inspo leads style.
+      console.log('[generate] render-anchored path — pinned render:', pinnedRender.storage_path);
+
+      const [renderBuffer, pinterestBuffers, styleBuffers] = await Promise.all([
+        downloadBuffer(pinnedRender.storage_path),
+        Promise.all(pinterestRes.rows.map((r: { storage_path: string }) => downloadBuffer(r.storage_path))),
+        Promise.all(styleRefRes.rows.map((r: { storage_path: string }) => downloadBuffer(r.storage_path))),
+      ]);
+
+      console.log('[generate] pinterest inspo:', pinterestBuffers.length, '| style refs:', styleBuffers.length);
+
+      imageBuffer = await generateFromRender(
+        renderBuffer,
+        prompt,
+        [...pinterestBuffers, ...styleBuffers],
+        pinterestBuffers.length,
       );
-      console.log('[generate] applying', styleBuffers.length, 'style reference(s)');
-      imageBuffer = await applyStyleReferences(imageBuffer, styleBuffers);
+    } else {
+      // ── Fallback: Imagen text-to-image path ──────────────────────────────
+      // No pinned render — generate from text, then apply style refs.
+      console.log('[generate] fallback path — no pinned render');
+
+      imageBuffer = await createImageWithGoogle(prompt);
+
+      const allStyleRows = [...pinterestRes.rows, ...styleRefRes.rows].slice(0, MAX_STYLE_REFS);
+      if (allStyleRows.length > 0) {
+        const styleBuffers = await Promise.all(
+          allStyleRows.map((r: { storage_path: string }) => downloadBuffer(r.storage_path))
+        );
+        console.log('[generate] applying', styleBuffers.length, 'style reference(s)');
+        imageBuffer = await applyStyleReferences(imageBuffer, styleBuffers);
+      }
     }
+
+    // ── Store result ─────────────────────────────────────────────────────────
 
     const storagePath = `enhanced/${row.project_id}/${Date.now()}-post-${id}.jpg`;
     await uploadBuffer(STORAGE_BUCKETS.COMPOSITIONS, storagePath, imageBuffer, 'image/jpeg');
@@ -98,7 +162,12 @@ export async function POST(
         storagePath,
         STORAGE_BUCKETS.COMPOSITIONS,
         `post-${id}.jpg`,
-        JSON.stringify({ enhancement_type: 'general', provider: 'google', post_id: id }),
+        JSON.stringify({
+          enhancement_type: 'general',
+          provider: 'google',
+          post_id: id,
+          render_anchored: !!pinnedRender,
+        }),
       ]
     );
     const imageId = imgRes.rows[0].id;
