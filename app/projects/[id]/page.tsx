@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ImageIcon, Sparkles, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ImageIcon, ArrowRight } from 'lucide-react';
 
 type Project = {
   id: string;
@@ -29,8 +29,6 @@ type Post = {
   image_id: string | null;
   image_url: string | null;
   image_rating: number | null;
-  generating?: boolean;
-  genError?: string;
 };
 
 const STAGES = [
@@ -44,7 +42,6 @@ const formatFecha = (d: string | null) =>
 
 export default function CampaignDetailPage() {
   const params    = useParams();
-  const router    = useRouter();
   const projectId = params.id as string;
 
   const [project, setProject]   = useState<Project | null>(null);
@@ -77,20 +74,6 @@ export default function CampaignDetailPage() {
       body: JSON.stringify({ status }),
     });
     fetchAll();
-  };
-
-  const generateImage = async (postId: string) => {
-    setPosts(ps => ps.map(p => p.id === postId ? { ...p, generating: true, genError: undefined } : p));
-    try {
-      const res  = await fetch(`/api/posts/${postId}/generate`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al generar');
-      router.push(`/projects/${projectId}/posts/${postId}?imageId=${data.imageId}`);
-    } catch (err) {
-      console.error(err);
-      const msg = err instanceof Error ? err.message : 'Error al generar';
-      setPosts(ps => ps.map(p => p.id === postId ? { ...p, generating: false, genError: msg } : p));
-    }
   };
 
   if (loading) return (
@@ -233,29 +216,15 @@ export default function CampaignDetailPage() {
                   )}
                 </div>
 
-                {/* Action */}
+                {/* Action — single entry into the post detail page where the layered studio lives */}
                 <div className="flex-shrink-0 flex flex-col items-end gap-1">
-                  {post.image_id ? (
-                    <Link
-                      href={`/projects/${projectId}/posts/${post.id}`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-600 border border-neutral-200 rounded-lg hover:border-neutral-400 transition-colors"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      Refinar
-                    </Link>
-                  ) : (
-                    <button
-                      onClick={() => generateImage(post.id)}
-                      disabled={post.generating}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 transition-colors disabled:opacity-50"
-                    >
-                      <Sparkles className={`w-3.5 h-3.5 ${post.generating ? 'animate-pulse' : ''}`} />
-                      {post.generating ? 'Generando…' : 'Generar'}
-                    </button>
-                  )}
-                  {post.genError && (
-                    <p className="text-xs text-red-500 max-w-[160px] text-right">{post.genError}</p>
-                  )}
+                  <Link
+                    href={`/projects/${projectId}/posts/${post.id}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-700 bg-white border border-neutral-200 rounded-lg hover:border-neutral-400 transition-colors"
+                  >
+                    {post.image_id ? 'Refinar' : 'Abrir'}
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
               </div>
             ))}

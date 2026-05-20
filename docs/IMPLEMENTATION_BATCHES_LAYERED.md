@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 32 / 34 batches complete.**
+**Overall progress: 33 / 34 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -110,7 +110,7 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 
 | Overall # | Phase ID | Batch | Status |
 |-----------|----------|-------|--------|
-| 33 | G1 | New posts default to layered output (single-image generate still reachable as legacy) | ⬜ PENDING |
+| 33 | G1 | Cutover — campaign page replaces "Generar" button with "Abrir"/"Refinar" link to the post detail page; legacy `generateImage()` + per-post generating state removed; post page hides legacy empty state (ImageVersionNavigator now shows only when a legacy image exists). Legacy `/api/posts/[id]/generate` route file remains intact for callers. | ✅ DONE |
 | 34 | G2 | Documentation pass: changelog entry + update master workflow memory | ⬜ PENDING |
 
 ---

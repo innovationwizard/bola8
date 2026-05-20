@@ -99,21 +99,12 @@ export default function PostDetailPage() {
         {/* Layered studio — asset pack */}
         <AssetPackPanel postId={postId} projectId={projectId} />
 
-        {/* Image feedback loop (legacy single-image flow — preserved until cutover G1) */}
-        {post.image_id ? (
+        {/* Legacy single-image refine loop — only shows when this post has an
+            existing legacy image (image_id set). New posts use the AssetPackPanel
+            above; the legacy flow stays accessible for backwards compatibility
+            but is no longer the entry point. */}
+        {post.image_id && (
           <ImageVersionNavigator imageId={post.image_id} projectId={projectId} />
-        ) : (
-          <div className="bg-white border border-neutral-200 rounded-2xl p-12 text-center">
-            <p className="text-sm text-neutral-400">
-              Todavía no hay imagen para este post.
-            </p>
-            <Link
-              href={`/projects/${projectId}`}
-              className="inline-block mt-4 text-xs text-neutral-600 underline hover:text-neutral-900 transition-colors"
-            >
-              Volver a la campaña para generarla
-            </Link>
-          </div>
         )}
 
       </div>
