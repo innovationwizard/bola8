@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 23 / 33 batches complete.**
+**Overall progress: 24 / 33 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -91,7 +91,7 @@ D1 split into 4 sub-batches (D1.1–D1.4) so the orchestration logic is built an
 |-----------|----------|-------|--------|
 | 22 | E1 | `GET /api/admin/usage` — aggregations: totals (today/week/month/lifetime), byProvider, byModel (30d), topProjects (30d top-10), FAL availability flag. Gated by requireSuperuser. | ✅ DONE |
 | 23 | E2 | `GET /api/admin/usage/calls?page=N` — paginated calls list (20 per page, most recent first); JOINs projects for project_name; returns `{ page, limit, total, calls[] }` for Prev/Next UI controls. Gated by requireSuperuser. | ✅ DONE |
-| 24 | E3 | UI page `/admin/usage` — totals + breakdowns + recent calls table + FAL availability indicator | ⬜ PENDING |
+| 24 | E3 | UI page `/admin/usage` — server shell with isSuperuser() gate (notFound on fail) + client UsageDashboard with 4 totals cards, provider/project/model tables, paginated recent calls (Prev/Next), refresh button, FAL availability indicator | ✅ DONE |
 
 ### Phase F — User UI: Layered Studio
 
