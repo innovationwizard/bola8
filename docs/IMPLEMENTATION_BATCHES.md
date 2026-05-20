@@ -17,7 +17,7 @@ If context is lost, READ THIS FILE FIRST to know exactly where to resume.
 |---|-------|--------|
 | 0 | Delete all legacy/dead code | ✅ DONE |
 | 1 | DB migration SQL | ✅ DONE |
-| 2 | API — post_reference_images CRUD routes | ⬜ PENDING |
+| 2 | API — post_reference_images CRUD routes | ✅ DONE |
 | 3 | API — pin/unpin render route | ⬜ PENDING |
 | 4 | Lib — `generateFromRender()` function | ⬜ PENDING |
 | 5 | API — update `generate` route (render-anchored path) | ⬜ PENDING |
