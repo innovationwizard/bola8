@@ -75,3 +75,21 @@ export async function removeBackground(
     return { buffer: opaquePng, transparencyApplied: false };
   }
 }
+
+/**
+ * Building layer — the pinned project render with its background removed.
+ *
+ * No generation happens. The render IS the building (it's the structural
+ * anchor for the entire pack); this function only cuts it out so the
+ * designer can stack it on top of the background layer in Photoshop.
+ *
+ * Thin wrapper over removeBackground() that tags layerType='building' so
+ * /admin/usage attributes the cutout cost correctly. Same fallback semantics:
+ * never throws, returns opaque PNG when Bria is unavailable or fails.
+ */
+export async function getBuildingLayer(
+  renderBuffer: Buffer,
+  ctx:          CallContext = {},
+): Promise<RemoveBackgroundResult> {
+  return removeBackground(renderBuffer, { ...ctx, layerType: 'building' });
+}

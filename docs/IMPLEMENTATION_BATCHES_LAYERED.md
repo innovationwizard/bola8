@@ -40,7 +40,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 
 ## Batch Status
 
-**Overall progress: 13 / 30 batches complete.**
+**Overall progress: 14 / 30 batches complete.**
 
 ### Phase A — Backend foundation (no FAL needed)
 
@@ -69,7 +69,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 | 11 | C3 | `lib/google-image.ts` — `generateFeaturedLayer()` — Imagen base + style apply for the highlighted amenity, isolated on neutral background | ✅ DONE |
 | 12 | C4 | `lib/google-image.ts` — `generateOrnamentsLayer()` — Imagen base + style apply for atmospheric accents, isolated on neutral background | ✅ DONE |
 | 13 | C5 | `lib/google-image.ts` — `generatePeopleLayer()` — Imagen base + style apply for one person doing a specific action, isolated on neutral background; Bria cuts downstream | ✅ DONE |
-| 14 | C6 | `lib/google-image.ts` — `getBuildingLayer()` — pinned render passed through Bria | ⬜ PENDING |
+| 14 | C6 | `lib/bria.ts` — `getBuildingLayer()` — pinned render passed through Bria (no Google call) | ✅ DONE |
 
 ### Phase D — Asset pack API surface
 
