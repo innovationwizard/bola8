@@ -48,7 +48,7 @@ If context is lost mid-implementation, **READ THIS FILE FIRST** to know exactly 
 | A2 | `lib/api-usage.ts` — logging primitive + pricing constants table | ✅ DONE |
 | A3 | Wire `api-usage` into existing Google API functions (instrumentation only, no behavior change) | ✅ DONE |
 | A4 | `lib/style-card.ts` — pure synthesis function (no API calls) | ✅ DONE |
-| A5 | `lib/superuser.ts` — Supabase auth check + SUPERUSER_EMAILS allowlist | ⬜ PENDING |
+| A5 | `lib/superuser.ts` — Supabase auth check + SUPERUSER_EMAILS allowlist | ✅ DONE |
 
 ### Phase B — FAL integration with graceful fallback
 
