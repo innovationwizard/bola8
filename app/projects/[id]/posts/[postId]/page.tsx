@@ -96,7 +96,7 @@ export default function PostDetailPage() {
         {/* Pinterest Inspo */}
         <PostReferenceImages postId={postId} projectId={projectId} />
 
-        {/* Layered studio — asset pack */}
+        {/* Layered studio — asset-pack panel (UI shows "capas") */}
         <AssetPackPanel postId={postId} projectId={projectId} />
 
         {/* Legacy single-image refine loop — only shows when this post has an

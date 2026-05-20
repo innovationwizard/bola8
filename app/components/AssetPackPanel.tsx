@@ -249,7 +249,7 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
         <div>
           <p className="text-xs uppercase tracking-[0.15em] text-neutral-400">Estudio de capas</p>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Genera el pack, ajusta cada capa por separado, descárgalas a Photoshop.
+            Genera las capas, ajusta cada una por separado, descárgalas a Photoshop.
           </p>
         </div>
         <button
@@ -261,16 +261,16 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
             : <Layers className="w-3.5 h-3.5" />}
           {generating
-            ? 'Generando pack…'
-            : (pack?.assetPackId ? 'Regenerar pack completo' : 'Generar pack completo')}
+            ? 'Generando capas…'
+            : (pack?.assetPackId ? 'Regenerar todas las capas' : 'Generar todas las capas')}
         </button>
       </div>
 
       {error && (
-        <p className="text-xs text-red-500">No se pudo cargar el pack: {error}</p>
+        <p className="text-xs text-red-500">No se pudieron cargar las capas: {error}</p>
       )}
       {generateError && (
-        <p className="text-xs text-red-500">No se pudo generar el pack: {generateError}</p>
+        <p className="text-xs text-red-500">No se pudieron generar las capas: {generateError}</p>
       )}
 
       {generating && (
@@ -292,7 +292,7 @@ export default function AssetPackPanel({ postId, projectId: _projectId }: AssetP
               </p>
               {packStatus && (
                 <p className="text-xs text-neutral-400 mt-2">
-                  Estado del pack: <PackStatusBadge status={packStatus} />
+                  Estado del conjunto: <PackStatusBadge status={packStatus} />
                 </p>
               )}
             </div>
@@ -388,7 +388,7 @@ function CompositeThumb({
   if (!layer) {
     return (
       <div className="w-24 h-30 rounded-lg bg-neutral-100 border border-neutral-200 flex items-center justify-center text-[10px] text-neutral-400 text-center px-1">
-        Sin pack
+        Sin capas
       </div>
     );
   }
@@ -431,7 +431,7 @@ function LayerBody({
         <p className="text-sm text-neutral-500">Capa: {label}</p>
         <p className="text-xs text-neutral-400 max-w-md">{labelHint}</p>
         <p className="text-xs text-neutral-300 mt-3">
-          Aún no hay pack para este post. Generar pack completo se conectará en F6.
+          Aún no hay capas para este post. Toca <span className="font-medium">Generar todas las capas</span> arriba.
         </p>
       </div>
     );
@@ -582,7 +582,7 @@ function StyleCardSidebar({ card, loading }: { card: StyleCard | null; loading: 
 
       {!loading && !card && (
         <p className="text-xs text-neutral-400">
-          La tarjeta de estilo aparecerá cuando se genere el pack.
+          La tarjeta de estilo aparecerá cuando se generen las capas.
         </p>
       )}
 
@@ -663,7 +663,7 @@ function GenerationProgressBanner({ elapsedSec }: { elapsedSec: number }) {
   return (
     <div className="border border-neutral-200 rounded-lg p-3 bg-neutral-50 space-y-2">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-neutral-700">Generando pack…</span>
+        <span className="text-neutral-700">Generando capas…</span>
         <span className="text-neutral-500 font-mono tabular-nums">{label}</span>
       </div>
       <div className="h-1 bg-neutral-200 rounded-full overflow-hidden">
